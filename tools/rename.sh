@@ -134,9 +134,17 @@ SED_REPLACE_FILE() {
 OS_TYPE="$(uname -s)"
 
 case "$OS_TYPE" in
-	"Darwin") SCRIPT_PATH="$(readlink "$0")" ;;
-	*) SCRIPT_PATH="$(readlink -f "$0")" ;;
-esac
+       "Darwin")
+           SCRIPT_PATH="$0"
+           if [ -L "$SCRIPT_PATH" ]; then
+               SCRIPT_PATH="$(readlink "$SCRIPT_PATH")"
+           fi
+           SCRIPT_PATH="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)/$(basename "$SCRIPT_PATH")"
+           ;;
+       *)
+           SCRIPT_PATH="$(readlink -f "$0")"
+           ;;
+   esac
 
 SCRIPT_DIR="$(dirname "$SCRIPT_PATH")"
 
