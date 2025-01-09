@@ -1,3 +1,4 @@
 {
-	"cSpell.words": ["Archi", "playfor"]
+	"cSpell.words": ["Archi", "Lockdown", "playfor", "uninstantiated"],
+	"dotnet.defaultSolution": "ASFTimedPlay.sln"
 }
