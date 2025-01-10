@@ -21,19 +21,19 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4.2.2
-      with:
-        show-progress: false
-        submodules: recursive
+      - name: Checkout code
+        uses: actions/checkout@v4.2.2
+        with:
+          show-progress: false
+          submodules: recursive
 
-    - name: Setup .NET Core
-      uses: actions/setup-dotnet@v4.2.0
-      with:
-        dotnet-version: ${{ env.DOTNET_SDK_VERSION }}
+      - name: Setup .NET Core
+        uses: actions/setup-dotnet@v4.2.0
+        with:
+          dotnet-version: ${{ env.DOTNET_SDK_VERSION }}
 
-    - name: Verify .NET Core
-      run: dotnet --info
+      - name: Verify .NET Core
+        run: dotnet --info
 
-    - name: Build ${{ matrix.configuration }}
-      run: dotnet build -c "${{ matrix.configuration }}" -p:ContinuousIntegrationBuild=true -p:UseAppHost=false --nologo
+      - name: Build ${{ matrix.configuration }}
+        run: dotnet build -c "${{ matrix.configuration }}" -p:ContinuousIntegrationBuild=true -p:UseAppHost=false --nologo
