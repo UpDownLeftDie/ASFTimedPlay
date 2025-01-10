@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text.Json;
 using System.Threading; // Add for Timer
 using System.Threading.Tasks;
 using System.Composition;
@@ -51,6 +50,16 @@ internal sealed class ASFTimedPlay : IGitHubPluginUpdates, IPlugin, IAsyncDispos
 		await ConfigLock.WaitAsync().ConfigureAwait(false);
 
 		try {
+			if (!File.Exists(ConfigFile)) {
+				// Create default config
+				Config = new TimedPlayConfig {
+					IdleGames = [],
+					PlayForGames = []
+				};
+				await SaveConfig().ConfigureAwait(false);
+				return;
+			}
+
 			string json = await File.ReadAllTextAsync(ConfigFile).ConfigureAwait(false);
 			Config = json.ToJsonObject<TimedPlayConfig>();
 
@@ -245,10 +254,8 @@ internal sealed class ASFTimedPlay : IGitHubPluginUpdates, IPlugin, IAsyncDispos
 				_ => null,
 			};
 
-	public sealed class IdleModule(Bot bot) : IBotModules, IDisposable {
-#pragma warning disable CA2213 // Bot is managed by ASF
-		private readonly Bot Bot = bot;
-#pragma warning restore CA2213
+	public sealed class IdleModule : IDisposable {
+		private readonly Bot Bot;
 		public string Name => nameof(IdleModule);
 		public Version Version =>
 			typeof(ASFTimedPlay).Assembly.GetName().Version
@@ -256,15 +263,7 @@ internal sealed class ASFTimedPlay : IGitHubPluginUpdates, IPlugin, IAsyncDispos
 		private HashSet<uint> IdleGames = [];
 		private readonly SemaphoreSlim IdleLock = new(1, 1);
 
-		public Task OnBotInitModules(
-			Bot bot,
-			IReadOnlyDictionary<string, JsonElement>? additionalConfigProperties = null
-		) => Task.CompletedTask;
-
-		public Task OnLoaded() {
-			ASF.ArchiLogger.LogGenericInfo("IdleModule has been loaded!");
-			return Task.CompletedTask;
-		}
+		internal IdleModule(Bot bot) => Bot = bot ?? throw new ArgumentNullException(nameof(bot));
 
 		public void SetIdleGames(HashSet<uint> games) {
 			IdleGames = games;
