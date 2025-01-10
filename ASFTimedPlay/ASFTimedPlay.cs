@@ -22,6 +22,7 @@ internal sealed class ASFTimedPlay : IGitHubPluginUpdates, IPlugin, IAsyncDispos
 	public Version Version =>
 		typeof(ASFTimedPlay).Assembly.GetName().Version
 		?? throw new InvalidOperationException(nameof(Version));
+	public static string UpdateChannel => "stable";
 
 	private static ASFTimedPlay? Instance { get; set; }
 	private readonly List<Timer> ActiveTimers = [];
