@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -6,11 +7,19 @@ using ArchiSteamFarm.Steam;
 namespace ASFTimedPlay.Commands;
 
 internal static class IdleCommand {
-	public static Task<string?> Response(Bot bot, string[] args) {
+	public static async Task<string?> Response(Bot bot, string[] args) {
 		string[] parameters = args.Skip(1).ToArray();
 
 		if (parameters.Length == 0) {
-			return Task.FromResult<string?>(bot.Commands.FormatBotResponse("Usage: !idle [Bots] <AppID1>\nTo clear idle games use: !resume [Bots]"));
+			return await Task.FromResult<string?>(bot.Commands.FormatBotResponse(
+				"Usage: !idle [Bots] <AppID1>\n" +
+				"Use !idle stop to stop idling and stop settings"
+			)).ConfigureAwait(false);
+		}
+
+		// Handle stop command
+		if (parameters[0].Equals("stop", StringComparison.OrdinalIgnoreCase)) {
+			return await CommandHelpers.HandleStopCommand(bot, stopIdleGame: true, stopPlayForGames: false).ConfigureAwait(false);
 		}
 
 		// Handle bot selection
@@ -21,40 +30,66 @@ internal static class IdleCommand {
 		} else {
 			bots = Bot.GetBots(parameters[0]);
 			if (bots == null || bots.Count == 0) {
-				return Task.FromResult<string?>(bot.Commands.FormatBotResponse("No valid bots found!"));
+				return await Task.FromResult<string?>(bot.Commands.FormatBotResponse("No valid bots found!")).ConfigureAwait(false);
 			} else {
 				parameters = parameters.Skip(1).ToArray();
 			}
 		}
 
 		if (parameters.Length == 0) {
-			return Task.FromResult<string?>(bot.Commands.FormatBotResponse("Please provide at least one game ID!"));
+			return await Task.FromResult<string?>(bot.Commands.FormatBotResponse("Please provide at least one game ID!")).ConfigureAwait(false);
 		}
 
 		// Parse game IDs
-		HashSet<uint> gameIds = [];
-		string[] gameStrings = parameters[0].Split(',');
-		foreach (string game in gameStrings) {
-			if (!uint.TryParse(game, out uint gameId)) {
-				return Task.FromResult<string?>(bot.Commands.FormatBotResponse($"Invalid game ID: {game}"));
-			}
-			_ = gameIds.Add(gameId);
+		string gameString = parameters[0];
+		if (!uint.TryParse(gameString, out uint gameId)) {
+			return await Task.FromResult<string?>(bot.Commands.FormatBotResponse($"Invalid game ID: {gameId}")).ConfigureAwait(false);
 		}
 
 		// Set up or update idle module for each bot
 		foreach (Bot targetBot in bots) {
+			// Only set up idling if the bot isn't busy with critical tasks
+			if (!targetBot.IsConnectedAndLoggedOn) {
+				return await Task.FromResult<string?>(bot.Commands.FormatBotResponse(
+					$"{targetBot.BotName} is not connected and logged on."
+				)).ConfigureAwait(false);
+			}
+
+			if (targetBot.CardsFarmer.CurrentGamesFarmingReadOnly.Count > 0) {
+				return await Task.FromResult<string?>(bot.Commands.FormatBotResponse(
+					$"{targetBot.BotName} is currently farming cards."
+				)).ConfigureAwait(false);
+			}
+
+			if (targetBot.GamesToRedeemInBackgroundCount > 0) {
+				return await Task.FromResult<string?>(bot.Commands.FormatBotResponse(
+					$"{targetBot.BotName} is currently redeeming games."
+				)).ConfigureAwait(false);
+			}
+
+			// Update config with new idle game
+			if (ASFTimedPlay.Config != null) {
+				if (!ASFTimedPlay.Config.PlayForGames.TryGetValue(targetBot.BotName, out PlayForEntry? entry)) {
+					entry = new PlayForEntry();
+					ASFTimedPlay.Config.PlayForGames[targetBot.BotName] = entry;
+				}
+				entry.IdleGameId = gameId;
+				entry.LastUpdate = DateTime.UtcNow;
+			}
+
 			if (!ASFTimedPlay.BotIdleModules.TryGetValue(targetBot, out ASFTimedPlay.IdleModule? module)) {
 				module = new ASFTimedPlay.IdleModule(targetBot);
 				ASFTimedPlay.BotIdleModules[targetBot] = module;
 			}
 
-			module.SetIdleGames(gameIds);
+			module.SetIdleGames(gameId);
 		}
 
-		string gamesText = string.Join(",", gameIds);
+		await ASFTimedPlay.SaveConfig().ConfigureAwait(false);
+
 		string botsText = string.Join(",", bots.Select(b => b.BotName));
-		return Task.FromResult<string?>(bot.Commands.FormatBotResponse(
-			$"Now idling {gamesText} on {botsText} during downtime."
-		));
+		return await Task.FromResult<string?>(bot.Commands.FormatBotResponse(
+			$"Now idling {gameId} on {botsText} during downtime."
+		)).ConfigureAwait(false);
 	}
 }

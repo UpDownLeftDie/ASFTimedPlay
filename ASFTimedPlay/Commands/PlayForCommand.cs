@@ -4,31 +4,43 @@ using System.Linq;
 using System.Threading.Tasks;
 using ArchiSteamFarm.Core;
 using ArchiSteamFarm.Steam;
+using System.Globalization;
 
 namespace ASFTimedPlay.Commands;
 
 internal static class PlayForCommand {
-	public static async Task<string?> Response(Bot bot, string[] args, EAccess access = EAccess.None, ulong steamID = 0) {
+	public static async Task<string?> Response(Bot bot, string[] args) {
 		try {
+			ASF.ArchiLogger.LogGenericDebug($"PlayFor command started with args: {string.Join(" ", args)}");
+
 			string[] parameters = args.Skip(1).ToArray();
-			if (parameters.Length < 2) {
+			if (parameters.Length == 0) {
 				return bot.Commands.FormatBotResponse(
-					"Usage: !playfor [Bots] <AppID1,AppID2,...> <Minutes>"
+					"Usage: !playfor [Bots] <AppID1,AppID2,...> <Minutes1,Minutes2,...>\n" +
+					"Use !playfor stop to stop playing and stop settings"
 				);
+			}
+
+			// Handle stop command
+			if (parameters[0].Equals("stop", StringComparison.OrdinalIgnoreCase)) {
+				return await CommandHelpers.HandleStopCommand(bot, stopIdleGame: false, stopPlayForGames: true).ConfigureAwait(false);
 			}
 
 			// Handle bot selection
 			HashSet<Bot>? bots;
 			if (parameters[0].Contains(',', StringComparison.Ordinal) || uint.TryParse(parameters[0], out _)) {
-				// If first parameter contains commas or is a number, assume it's game IDs and use current bot
+				ASF.ArchiLogger.LogGenericDebug("Using current bot");
 				bots = [bot];
 			} else {
 				bots = Bot.GetBots(parameters[0]);
+				ASF.ArchiLogger.LogGenericDebug($"Got bots: {string.Join(",", bots?.Select(b => b.BotName) ?? [])}");
 				if (bots == null || bots.Count == 0) {
 					return bot.Commands.FormatBotResponse("No valid bots found!");
 				}
 				parameters = parameters.Skip(1).ToArray();
 			}
+
+			ASF.ArchiLogger.LogGenericDebug($"Processing parameters: {string.Join(" ", parameters)}");
 
 			if (parameters.Length < 2) {
 				return bot.Commands.FormatBotResponse(
@@ -36,9 +48,33 @@ internal static class PlayForCommand {
 				);
 			}
 
-			// Parse game IDs
+			// Parse game IDs and handle idle marker (*)
 			List<uint> gameIds = [];
+			uint? idleGame = null;
 			string[] gameStrings = parameters[0].Split(',');
+			string[] minuteStrings = parameters[1].Split(',');
+
+			// If we have multiple games but single minute value
+			if (minuteStrings.Length == 1) {
+				string min = minuteStrings[0];
+				if (min == "*") {
+					// Get the last game ID before modifying the array
+					idleGame = uint.Parse(gameStrings[^1], CultureInfo.InvariantCulture);
+					// Then remove the idle game from gameStrings
+					gameStrings = gameStrings.Take(gameStrings.Length - 1).ToArray();
+				}
+			} else if (minuteStrings.Length == gameStrings.Length) {
+				// Check if last minute value is "*"
+				if (minuteStrings[^1] == "*") {
+					// Get the last game ID before modifying arrays
+					idleGame = uint.Parse(gameStrings[^1], CultureInfo.InvariantCulture);
+					// Then remove the last game and minute
+					gameStrings = gameStrings.Take(gameStrings.Length - 1).ToArray();
+					minuteStrings = minuteStrings.Take(minuteStrings.Length - 1).ToArray();
+				}
+			}
+
+			// Parse remaining game IDs
 			foreach (string game in gameStrings) {
 				if (!uint.TryParse(game, out uint gameId)) {
 					return bot.Commands.FormatBotResponse($"Invalid game ID: {game}");
@@ -46,91 +82,68 @@ internal static class PlayForCommand {
 				gameIds.Add(gameId);
 			}
 
-			// Parse minutes and handle idle marker (*)
+			// Parse minutes
 			List<uint> minutes = [];
-			HashSet<uint> idleAfterCompletion = [];
-			string[] minuteStrings = parameters[1].Split(',');
-
-			// If single minute value provided, apply to all games
-			if (minuteStrings.Length == 1) {
-				string min = minuteStrings[0];
-				if (min == "*") {
-					// Only the last game should be idled
-					_ = idleAfterCompletion.Add(gameIds[^1]); // Add only the last game
-					minutes.AddRange(gameIds.Select(id => idleAfterCompletion.Contains(id) ? 0 : (uint) 1));
-				} else if (uint.TryParse(min, out uint minuteValue) && minuteValue > 0) {
-					minutes.AddRange(Enumerable.Repeat(minuteValue, gameIds.Count));
-				} else {
-					return bot.Commands.FormatBotResponse($"Invalid minutes value: {min}");
+			if (minuteStrings.Length == 1 && gameIds.Count > 0) {
+				// Single minute value for all games
+				if (!uint.TryParse(minuteStrings[0], out uint minuteValue) || minuteValue == 0) {
+					return bot.Commands.FormatBotResponse($"Invalid minutes value: {minuteStrings[0]}");
 				}
+				minutes.AddRange(Enumerable.Repeat(minuteValue, gameIds.Count));
 			} else {
-				// Handle individual minute values for each game
+				// Individual minute values
 				if (minuteStrings.Length != gameIds.Count) {
-					return bot.Commands.FormatBotResponse(
-						"Number of minute values must match number of games!"
-					);
+					return bot.Commands.FormatBotResponse("Number of minute values must match number of games!");
 				}
 
-				bool hasIdleGame = false;
-				for (int i = 0; i < minuteStrings.Length; i++) {
-					string min = minuteStrings[i];
-					if (min == "*") {
-						if (hasIdleGame) {
-							return bot.Commands.FormatBotResponse("Only one game can be marked for idling!");
-						}
-						if (i != minuteStrings.Length - 1) {
-							return bot.Commands.FormatBotResponse("Only the last game can be marked for idling!");
-						}
-						hasIdleGame = true;
-						_ = idleAfterCompletion.Add(gameIds[i]);
-						minutes.Add(0);
-					} else if (uint.TryParse(min, out uint minuteValue) && minuteValue > 0) {
-						minutes.Add(minuteValue);
-					} else {
+				foreach (string min in minuteStrings) {
+					if (!uint.TryParse(min, out uint minuteValue) || minuteValue == 0) {
 						return bot.Commands.FormatBotResponse($"Invalid minutes value: {min}");
 					}
+					minutes.Add(minuteValue);
 				}
 			}
 
 			foreach (Bot targetBot in bots) {
+				PlayForEntry entry = new() {
+					GameMinutes = gameIds.ToDictionary(
+						gameId => gameId,
+						gameId => minutes[gameIds.IndexOf(gameId)]
+					),
+					IdleGameId = idleGame ?? 0,
+					LastUpdate = DateTime.UtcNow
+				};
+
+				if (ASFTimedPlay.Config == null) {
+					return bot.Commands.FormatBotResponse("Internal error: Config is null");
+				}
+
+				bool lockTaken = false;
 				try {
-					PlayForEntry entry = new() {
-						GameIds = [.. gameIds],
-						Minutes = minutes,
-						RemainingMinutes = gameIds.ToDictionary(
-							gameId => gameId,
-							gameId => minutes[gameIds.IndexOf(gameId)]
-						),
-						IdleAfterCompletion = idleAfterCompletion,
-						LastUpdate = DateTime.UtcNow
-					};
-
-					if (ASFTimedPlay.Config == null) {
-						return bot.Commands.FormatBotResponse("Internal error: Config is null");
-					}
-
 					await ASFTimedPlay.ConfigLock.WaitAsync().ConfigureAwait(false);
-					try {
-						if (!ASFTimedPlay.Config.PlayForGames.TryGetValue(targetBot.BotName, out List<PlayForEntry>? entries)) {
-							entries = [];
-							ASFTimedPlay.Config.PlayForGames[targetBot.BotName] = entries;
-						}
+					lockTaken = true;
 
-						entries.Add(entry);
-						await ASFTimedPlay.SaveConfig().ConfigureAwait(false);
-						await ASFTimedPlay.ScheduleGames(targetBot, entry).ConfigureAwait(false);
-					} finally {
+					ASFTimedPlay.Config.PlayForGames[targetBot.BotName] = entry;
+
+					await ASFTimedPlay.SaveConfig(lockAlreadyHeld: true).ConfigureAwait(false);
+					await ASFTimedPlay.ScheduleGames(targetBot, entry).ConfigureAwait(false);
+				} finally {
+					if (lockTaken) {
 						_ = ASFTimedPlay.ConfigLock.Release();
 					}
-				} catch (Exception ex) {
-					return bot.Commands.FormatBotResponse($"Failed to process bot {targetBot.BotName}: {ex.Message}");
 				}
 			}
 
-			string gamesInfo = string.Join(", ", gameIds.Select((id, index) => idleAfterCompletion.Contains(id) ? $"game {id} will be idled indefinitely" : $"game {id} for {minutes[index]} minutes"));
+			string gamesInfo = string.Join(", ", gameIds.Select((id, index) =>
+				$"{id} for {minutes[index]} minutes"));
+			if (idleGame.HasValue) {
+				gamesInfo += $", {idleGame.Value} will be idled after completion";
+			}
 
 			string botsText = string.Join(",", bots.Select(b => b.BotName));
-			return bot.Commands.FormatBotResponse($"Now playing {gamesInfo} on {botsText}.");
+			string response = $"Now playing: {gamesInfo} on {botsText}";
+			ASF.ArchiLogger.LogGenericDebug($"Sending response: {response}");
+			return bot.Commands.FormatBotResponse(response);
 		} catch (Exception ex) {
 			ASF.ArchiLogger.LogGenericError($"PlayFor command failed: {ex}");
 			return bot.Commands.FormatBotResponse($"Command failed: {ex.Message}");

@@ -10,28 +10,16 @@ namespace ASFTimedPlay;
 [UsedImplicitly]
 internal sealed class TimedPlayConfig {
 	[JsonRequired]
-	public bool Enabled { get; set; } = true;
-
-	[JsonRequired]
-	public Dictionary<string, HashSet<uint>> IdleGames { get; set; } = [];
-
-	[JsonRequired]
-	public Dictionary<string, List<PlayForEntry>> PlayForGames { get; set; } = [];
+	public Dictionary<string, PlayForEntry> PlayForGames { get; set; } = [];
 }
 
 internal sealed class PlayForEntry {
 	[JsonRequired]
-	public HashSet<uint> GameIds { get; set; } = [];
+	public Dictionary<uint, uint> GameMinutes { get; set; } = [];
 
 	[JsonRequired]
-	public List<uint> Minutes { get; set; } = [];
+	public uint IdleGameId { get; set; }
 
 	[JsonRequired]
-	public Dictionary<uint, uint> RemainingMinutes { get; set; } = [];
-
-	[JsonRequired]
-	public HashSet<uint> IdleAfterCompletion { get; set; } = [];
-
-	[JsonRequired]
-	public DateTime LastUpdate { get; set; } = DateTime.UtcNow;
+	public DateTime LastUpdate { get; set; }
 }
