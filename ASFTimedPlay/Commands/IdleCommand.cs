@@ -9,13 +9,8 @@ internal static class IdleCommand {
 	public static Task<string?> Response(Bot bot, string[] args) {
 		string[] parameters = args.Skip(1).ToArray();
 
-		// Clear idle games if no parameters
 		if (parameters.Length == 0) {
-			if (ASFTimedPlay.BotIdleModules.TryGetValue(bot, out ASFTimedPlay.IdleModule? module)) {
-				module.StopIdling();
-				_ = ASFTimedPlay.BotIdleModules.Remove(bot);
-			}
-			return Task.FromResult<string?>(bot.Commands.FormatBotResponse("Cleared idle games list."));
+			return Task.FromResult<string?>(bot.Commands.FormatBotResponse("Usage: !idle [Bots] <AppID1>\nTo clear idle games use: !resume [Bots]"));
 		}
 
 		// Handle bot selection
@@ -25,10 +20,10 @@ internal static class IdleCommand {
 			bots = [bot];
 		} else {
 			bots = Bot.GetBots(parameters[0]);
-			if (bots != null && bots.Count > 0) {
-				parameters = parameters.Skip(1).ToArray();
+			if (bots == null || bots.Count == 0) {
+				return Task.FromResult<string?>(bot.Commands.FormatBotResponse("No valid bots found!"));
 			} else {
-				bots = [bot];
+				parameters = parameters.Skip(1).ToArray();
 			}
 		}
 

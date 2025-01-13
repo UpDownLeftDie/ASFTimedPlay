@@ -10,7 +10,7 @@ namespace ASFTimedPlay;
 [UsedImplicitly]
 internal sealed class TimedPlayConfig {
 	[JsonRequired]
-	public bool Enabled { get; private set; } = true;
+	public bool Enabled { get; set; } = true;
 
 	[JsonRequired]
 	public Dictionary<string, HashSet<uint>> IdleGames { get; set; } = [];

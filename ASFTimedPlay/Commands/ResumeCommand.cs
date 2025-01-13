@@ -11,13 +11,14 @@ internal static class ResumeCommand {
 
 		// Handle bot selection
 		HashSet<Bot>? bots;
-		if (parameters.Length > 0) {
-			bots = Bot.GetBots(parameters[0]);
-			if (bots == null || bots.Count == 0) {
-				return bot.Commands.FormatBotResponse("No valid bots found!");
-			}
-		} else {
+		bots = Bot.GetBots(parameters[0]);
+		if (bots == null || bots.Count == 0) {
 			bots = [bot];
+		}
+		if (bots == null || bots.Count == 0) {
+			return bot.Commands.FormatBotResponse("No valid bots found!");
+		} else {
+			parameters = parameters.Skip(1).ToArray();
 		}
 
 		await ASFTimedPlay.ConfigLock.WaitAsync().ConfigureAwait(false);
@@ -33,6 +34,9 @@ internal static class ResumeCommand {
 					module.StopIdling();
 					_ = ASFTimedPlay.BotIdleModules.Remove(targetBot);
 				}
+
+				// Stop currently playing games
+				_ = await targetBot.Actions.Play([]).ConfigureAwait(false);
 
 				// Clear PlayFor entries
 				if (ASFTimedPlay.Config?.PlayForGames.Remove(targetBot.BotName) == true) {
