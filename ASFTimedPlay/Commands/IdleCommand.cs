@@ -12,8 +12,8 @@ internal static class IdleCommand {
 
 		if (parameters.Length == 0) {
 			return await Task.FromResult<string?>(bot.Commands.FormatBotResponse(
-				"Usage: !idle [Bots] <AppID1>\n" +
-				"Use !idle stop to stop idling and stop settings"
+				"Usage: !idle [Bots] <AppID>\n" +
+				"Use: \"!idle stop\" to stop idling"
 			)).ConfigureAwait(false);
 		}
 

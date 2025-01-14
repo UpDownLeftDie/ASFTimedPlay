@@ -2,22 +2,22 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using ArchiSteamFarm.Core;
 using ArchiSteamFarm.Steam;
 using System.Globalization;
+using static ASFTimedPlay.Utils;
 
 namespace ASFTimedPlay.Commands;
 
 internal static class PlayForCommand {
 	public static async Task<string?> Response(Bot bot, string[] args) {
 		try {
-			ASF.ArchiLogger.LogGenericDebug($"PlayFor command started with args: {string.Join(" ", args)}");
+			LogGenericDebug($"PlayFor command started with args: {string.Join(" ", args)}");
 
 			string[] parameters = args.Skip(1).ToArray();
 			if (parameters.Length == 0) {
 				return bot.Commands.FormatBotResponse(
 					"Usage: !playfor [Bots] <AppID1,AppID2,...> <Minutes1,Minutes2,...>\n" +
-					"Use !playfor stop to stop playing and stop settings"
+					"Use: \"!playfor stop\" to stop playing"
 				);
 			}
 
@@ -29,18 +29,18 @@ internal static class PlayForCommand {
 			// Handle bot selection
 			HashSet<Bot>? bots;
 			if (parameters[0].Contains(',', StringComparison.Ordinal) || uint.TryParse(parameters[0], out _)) {
-				ASF.ArchiLogger.LogGenericDebug("Using current bot");
+				LogGenericDebug("Using current bot");
 				bots = [bot];
 			} else {
 				bots = Bot.GetBots(parameters[0]);
-				ASF.ArchiLogger.LogGenericDebug($"Got bots: {string.Join(",", bots?.Select(b => b.BotName) ?? [])}");
+				LogGenericDebug($"Got bots: {string.Join(",", bots?.Select(b => b.BotName) ?? [])}");
 				if (bots == null || bots.Count == 0) {
 					return bot.Commands.FormatBotResponse("No valid bots found!");
 				}
 				parameters = parameters.Skip(1).ToArray();
 			}
 
-			ASF.ArchiLogger.LogGenericDebug($"Processing parameters: {string.Join(" ", parameters)}");
+			LogGenericDebug($"Processing parameters: {string.Join(" ", parameters)}");
 
 			if (parameters.Length < 2) {
 				return bot.Commands.FormatBotResponse(
@@ -142,10 +142,10 @@ internal static class PlayForCommand {
 
 			string botsText = string.Join(",", bots.Select(b => b.BotName));
 			string response = $"Now playing: {gamesInfo} on {botsText}";
-			ASF.ArchiLogger.LogGenericDebug($"Sending response: {response}");
+			LogGenericDebug($"Sending response: {response}");
 			return bot.Commands.FormatBotResponse(response);
 		} catch (Exception ex) {
-			ASF.ArchiLogger.LogGenericError($"PlayFor command failed: {ex}");
+			LogGenericError($"PlayFor command failed: {ex}");
 			return bot.Commands.FormatBotResponse($"Command failed: {ex.Message}");
 		}
 	}

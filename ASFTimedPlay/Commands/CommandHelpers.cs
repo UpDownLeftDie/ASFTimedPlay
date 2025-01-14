@@ -1,8 +1,8 @@
 using System;
 using System.Threading.Tasks;
-using ArchiSteamFarm.Core;
 using ArchiSteamFarm.Steam;
 using static ASFTimedPlay.ASFTimedPlay;
+using static ASFTimedPlay.Utils;
 
 namespace ASFTimedPlay.Commands;
 
@@ -17,7 +17,7 @@ internal static class CommandHelpers {
 					module.StopIdling();
 					module.Dispose();
 					_ = BotIdleModules.Remove(bot);
-					ASF.ArchiLogger.LogGenericDebug("Stopped and removed idle module");
+					LogGenericDebug("Stopped and removed idle module");
 				}
 				entry.IdleGameId = 0;
 				madeChanges = true;
@@ -36,7 +36,7 @@ internal static class CommandHelpers {
 
 				// Stop any currently playing games
 				_ = await bot.Actions.Play([]).ConfigureAwait(false);
-				ASF.ArchiLogger.LogGenericDebug("Stopped playing games in Steam");
+				LogGenericDebug("Stopped playing games in Steam");
 			}
 
 			string message = (stopIdleGame, stopPlayForGames) switch {
