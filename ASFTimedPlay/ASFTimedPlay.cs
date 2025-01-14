@@ -26,8 +26,8 @@ internal sealed class ASFTimedPlay : IGitHubPluginUpdates, IPlugin, IAsyncDispos
 		?? throw new InvalidOperationException(nameof(Version));
 	public static string UpdateChannel => "stable";
 
-	private static ASFTimedPlay? Instance { get; set; }
-	private readonly List<Timer> ActiveTimers = [];
+	internal static ASFTimedPlay? Instance { get; set; }
+	internal readonly Dictionary<Bot, Timer> ActiveTimers = [];
 	internal static readonly Dictionary<Bot, IdleModule> BotIdleModules = [];
 	internal static TimedPlayConfig? Config { get; private set; }
 
@@ -156,12 +156,11 @@ internal sealed class ASFTimedPlay : IGitHubPluginUpdates, IPlugin, IAsyncDispos
 			(bool stopSuccess, string stopMessage) = await bot.Actions.Play([]).ConfigureAwait(false);
 			LogGenericDebug($"Stop result: {stopSuccess}. {stopMessage}");
 
-			// Dispose any existing timers
+			// Dispose any existing timers for this bot
 			if (Instance != null) {
-				foreach (Timer timer in Instance.ActiveTimers) {
-					await timer.DisposeAsync().ConfigureAwait(false);
+				if (Instance.ActiveTimers.TryGetValue(bot, out Timer? timers)) {
+					await timers.DisposeAsync().ConfigureAwait(false);
 				}
-				Instance.ActiveTimers.Clear();
 			}
 
 			// Get first game that still has time remaining
@@ -241,8 +240,8 @@ internal sealed class ASFTimedPlay : IGitHubPluginUpdates, IPlugin, IAsyncDispos
 					);
 
 					if (Instance != null) {
-						Instance.ActiveTimers.Add(playTimer);
-						LogGenericDebug($"Timer added to active timers for game {currentGameId}");
+						Instance.ActiveTimers[bot] = playTimer;
+						LogGenericDebug($"Timer added to active timers for game {currentGameId} on bot {bot.BotName}");
 						playTimer = null; // Transfer ownership to ActiveTimers
 					}
 
@@ -377,9 +376,10 @@ internal sealed class ASFTimedPlay : IGitHubPluginUpdates, IPlugin, IAsyncDispos
 
 		await SaveConfig().ConfigureAwait(false);
 
-		foreach (Timer timer in ActiveTimers) {
+		foreach (Timer timer in ActiveTimers.Values) {
 			await timer.DisposeAsync().ConfigureAwait(false);
 		}
+
 		ActiveTimers.Clear();
 
 		foreach (IdleModule module in BotIdleModules.Values) {
@@ -468,10 +468,9 @@ internal sealed class ASFTimedPlay : IGitHubPluginUpdates, IPlugin, IAsyncDispos
 	}
 
 	public async void Dispose() {
-		foreach (Timer timer in ActiveTimers) {
+		foreach (Timer timer in ActiveTimers.Values) {
 			await timer.DisposeAsync().ConfigureAwait(false);
 		}
-
 		ActiveTimers.Clear();
 		Instance = null;
 	}

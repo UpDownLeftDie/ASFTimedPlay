@@ -1,8 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using ArchiSteamFarm.Steam;
 using static ASFTimedPlay.ASFTimedPlay;
 using static ASFTimedPlay.Utils;
+using Timer = System.Threading.Timer;
 
 namespace ASFTimedPlay.Commands;
 
@@ -33,6 +35,13 @@ internal static class CommandHelpers {
 			if (stopPlayForGames && entry.GameMinutes.Count > 0) {
 				entry.GameMinutes.Clear();
 				madeChanges = true;
+
+				// Dispose timer for this bot
+				if (Instance != null && Instance.ActiveTimers.TryGetValue(bot, out Timer? timer)) {
+					await timer.DisposeAsync().ConfigureAwait(false);
+					_ = Instance.ActiveTimers.Remove(bot);
+					LogGenericDebug($"Cleared timer for bot {bot.BotName}");
+				}
 			}
 
 			// Update config if changes were made
