@@ -14,17 +14,48 @@
 
 ## Description
 
-ASFTimedPlay is a plugin for ArchiSteamFarm that allows you set your bots to play games for a certain amount of time.
+ASFTimedPlay is a plugin for ArchiSteamFarm that allows you to set your bots to play games for specific durations and optionally idle a game afterwards.
 
 ---
 
-## Usage
+## Commands
 
-`!playfor [Bots] <AppID1,AppID2,...> <Minutes>`
-Minutes can be a single number or a comma separated list of numbers (one for each appID)
+`!playfor` - Play games for a specified duration
+`!idle` - Idle a game after playing for a specified duration
 
-### Examples
+### PlayFor Command
 
-- `!playfor ASF 400 60` - All bots play appID 400 for 60 minutes
-- `!playfor ASF 400,440 60` - All bots plays appID 400 for 60 minutes, then appID 440 for 60 minutes
-- `!playfor botname 400,440 60,10` - Only botname plays appID 400 for 60 minutes, then appID 440 for 10 minutes
+`!playfor [Bots] <AppID1,AppID2,...> <Minutes1,Minutes2,...>`
+
+The PlayFor command lets you set up timed game sessions. You can specify multiple games and their durations, with an optional idle game at the end.
+
+#### PlayFor Command Examples
+
+- `!playfor ASF 400 60` - All bots play AppID 400 for 60 minutes
+- `!playfor ASF 400,440 60` - All bots play AppID 400 and 440 for 60 minutes each
+- `!playfor botname 400,440 60,10` - Bot "botname" plays AppID 400 for 60 minutes, then AppID 440 for 10 minutes
+- `!playfor ASF 400,440,500 60,30,*` - All bots play AppID 400 for 60 minutes, AppID 440 for 30 minutes, then idle AppID 500
+- `!playfor stop` - Stops all PlayFor sessions on the current bot
+
+### Idle Command
+
+`!idle [Bots] <AppID>`
+
+The Idle command sets up a game to be idled during bot downtime (when not farming cards or performing other tasks).
+
+#### Idle Command Examples
+
+- `!idle ASF 400` - All bots will idle AppID 400 during downtime
+- `!idle botname 440` - Bot "botname" will idle AppID 440 during downtime
+- `!idle stop` - Stops idling on the current bot
+
+---
+
+## Features
+
+- Play multiple games for specified durations
+- Automatically switch between games based on configured times
+- Optional idle game after completing timed sessions
+- Persistent configuration that survives bot restarts
+- Automatic resumption of sessions after disconnections
+- Compatible with ASF's card farming and other features
