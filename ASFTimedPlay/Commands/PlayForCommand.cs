@@ -17,13 +17,19 @@ internal static class PlayForCommand {
 			if (parameters.Length == 0) {
 				return bot.Commands.FormatBotResponse(
 					"Usage: !playfor [Bots] <AppID1,AppID2,...> <Minutes1,Minutes2,...>\n" +
-					"Use: \"!playfor stop\" to stop playing"
+					"Use: \"!playfor stop\" to stop playing (keeps any idle game)\n" +
+					"Use: \"!playfor stopall\" to stop everything (including idling)"
 				);
 			}
 
 			// Handle stop command
 			if (parameters[0].Equals("stop", StringComparison.OrdinalIgnoreCase)) {
 				return await CommandHelpers.HandleStopCommand(bot, stopIdleGame: false, stopPlayForGames: true).ConfigureAwait(false);
+			}
+
+			// Handle stopall command
+			if (parameters[0].Equals("stopall", StringComparison.OrdinalIgnoreCase)) {
+				return await CommandHelpers.HandleStopCommand(bot, stopIdleGame: true, stopPlayForGames: true).ConfigureAwait(false);
 			}
 
 			// Handle bot selection

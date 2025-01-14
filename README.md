@@ -14,7 +14,7 @@
 
 ## Description
 
-ASFTimedPlay is a plugin for ArchiSteamFarm that allows you to set your bots to play games for specific durations and optionally idle a game afterwards.
+ASFTimedPlay is a plugin for ArchiSteamFarm that allows you to set your bots to play games for specific durations and optionally idle a game afterwards with settings that persist between restarts of ASF.
 
 ---
 
@@ -32,10 +32,11 @@ The PlayFor command lets you set up timed game sessions. You can specify multipl
 #### PlayFor Command Examples
 
 - `!playfor ASF 400 60` - All bots play AppID 400 for 60 minutes
-- `!playfor ASF 400,440 60` - All bots play AppID 400 and 440 for 60 minutes each
-- `!playfor botname 400,440 60,10` - Bot "botname" plays AppID 400 for 60 minutes, then AppID 440 for 10 minutes
-- `!playfor ASF 400,440,500 60,30,*` - All bots play AppID 400 for 60 minutes, AppID 440 for 30 minutes, then idle AppID 500
-- `!playfor stop` - Stops all PlayFor sessions on the current bot
+- `!playfor ASF 400,620 60` - All bots play AppID 400 and 620 for 60 minutes each
+- `!playfor botname 400,620 60,10` - Bot "botname" plays AppID 400 for 60 minutes, then AppID 620 for 10 minutes
+- `!playfor ASF 400,620,500 60,30,*` - All bots play AppID 400 for 60 minutes, AppID 620 for 30 minutes, then idle AppID 500
+- `!playfor stop` - Stops all PlayFor sessions on the current bot (does not clear the idle game, if set)
+- `!playfor stopall` - Stops all PlayFor and Idle sessions on the current bot
 
 ### Idle Command
 
@@ -46,7 +47,7 @@ The Idle command sets up a game to be idled during bot downtime (when not farmin
 #### Idle Command Examples
 
 - `!idle ASF 400` - All bots will idle AppID 400 during downtime
-- `!idle botname 440` - Bot "botname" will idle AppID 440 during downtime
+- `!idle botname 620` - Bot "botname" will idle AppID 620 during downtime
 - `!idle stop` - Stops idling on the current bot
 
 ---
