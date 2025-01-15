@@ -1,16 +1,15 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Composition;
 using System.IO;
 using System.Linq;
 using System.Threading; // Add for Timer
 using System.Threading.Tasks;
-using System.Composition;
 using ArchiSteamFarm.Helpers.Json;
-using ArchiSteamFarm.Plugins.Interfaces; // For IBotModules
+using ArchiSteamFarm.Plugins.Interfaces;
 using ArchiSteamFarm.Steam;
 using JetBrains.Annotations;
 using SteamKit2;
-using System.Collections.Concurrent;
 using static ASFTimedPlay.Utils;
 
 namespace ASFTimedPlay;
@@ -18,7 +17,13 @@ namespace ASFTimedPlay;
 #pragma warning disable CA1812 // ASF uses this class during runtime
 [Export(typeof(IPlugin))]
 [UsedImplicitly]
-internal sealed class ASFTimedPlay : IGitHubPluginUpdates, IPlugin, IAsyncDisposable, IBotCommand2, IBot, IBotConnection {
+internal sealed class ASFTimedPlay
+	: IGitHubPluginUpdates,
+		IPlugin,
+		IAsyncDisposable,
+		IBotCommand2,
+		IBot,
+		IBotConnection {
 	public string Name => nameof(ASFTimedPlay);
 	public string RepositoryName => "UpDownLeftDie/ASFTimedPlay";
 	public Version Version =>
@@ -30,7 +35,6 @@ internal sealed class ASFTimedPlay : IGitHubPluginUpdates, IPlugin, IAsyncDispos
 	internal readonly Dictionary<Bot, Timer> ActiveTimers = [];
 	internal static readonly Dictionary<Bot, IdleModule> BotIdleModules = [];
 	internal static TimedPlayConfig? Config { get; private set; }
-
 	private const int BufferedMinute = 61;
 
 	private const string ConfigFile = "ASFTimedPlay.json";
@@ -39,8 +43,6 @@ internal sealed class ASFTimedPlay : IGitHubPluginUpdates, IPlugin, IAsyncDispos
 		ConfigFile
 	);
 	internal static readonly SemaphoreSlim ConfigLock = new(1, 1);
-
-	private readonly ConcurrentDictionary<uint, Timer> GameTimers = new();
 
 	public ASFTimedPlay() => Instance = this;
 
@@ -53,13 +55,13 @@ internal sealed class ASFTimedPlay : IGitHubPluginUpdates, IPlugin, IAsyncDispos
 				LogGenericDebug($"Config file not found at path: {ConfigPath}");
 				LogGenericDebug("Creating new TimedPlayConfig object");
 
-				Config = new TimedPlayConfig {
-					PlayForGames = []
-				};
+				Config = new TimedPlayConfig { PlayForGames = [] };
 
 				LogGenericDebug("About to save new config file");
 				await SaveConfig().ConfigureAwait(false);
-				LogGenericDebug($"Config properties - PlayForGames count: {Config.PlayForGames?.Count}");
+				LogGenericDebug(
+					$"Config properties - PlayForGames count: {Config.PlayForGames?.Count}"
+				);
 			} else {
 				LogGenericDebug("Reading existing config file");
 				string json = await File.ReadAllTextAsync(ConfigPath).ConfigureAwait(false);
@@ -142,7 +144,9 @@ internal sealed class ASFTimedPlay : IGitHubPluginUpdates, IPlugin, IAsyncDispos
 
 			// First stop any currently running games
 			LogGenericDebug("Stopping current games");
-			(bool stopSuccess, string stopMessage) = await bot.Actions.Play([]).ConfigureAwait(false);
+			(bool stopSuccess, string stopMessage) = await bot
+				.Actions.Play([])
+				.ConfigureAwait(false);
 			LogGenericDebug($"Stop result: {stopSuccess}. {stopMessage}");
 
 			// Dispose any existing timers for this bot
@@ -153,8 +157,8 @@ internal sealed class ASFTimedPlay : IGitHubPluginUpdates, IPlugin, IAsyncDispos
 			}
 
 			// Get first game that still has time remaining
-			KeyValuePair<uint, uint> firstGame = entry.GameMinutes
-				.Where(x => x.Value > 0)
+			KeyValuePair<uint, uint> firstGame = entry
+				.GameMinutes.Where(x => x.Value > 0)
 				.OrderBy(x => x.Key)
 				.FirstOrDefault();
 
@@ -162,7 +166,9 @@ internal sealed class ASFTimedPlay : IGitHubPluginUpdates, IPlugin, IAsyncDispos
 				// Set up timer for the game
 				Timer? playTimer = null;
 				try {
-					LogGenericDebug($"Setting up timer for game {firstGame.Key} for {firstGame.Value} minutes");
+					LogGenericDebug(
+						$"Setting up timer for game {firstGame.Key} for {firstGame.Value} minutes"
+					);
 
 					uint currentGameId = firstGame.Key;
 
@@ -173,45 +179,85 @@ internal sealed class ASFTimedPlay : IGitHubPluginUpdates, IPlugin, IAsyncDispos
 					playTimer = new Timer(
 						async _ => {
 							try {
-								LogGenericDebug($"Timer callback triggered for game {currentGameId}");
+								LogGenericDebug(
+									$"Timer callback triggered for game {currentGameId}"
+								);
 								if (Instance != null) {
 									// Update remaining minutes in config
 									await ConfigLock.WaitAsync().ConfigureAwait(false);
 									try {
-										if (Config?.PlayForGames.TryGetValue(bot.BotName, out PlayForEntry? currentEntry) == true) {
-											if (currentEntry.GameMinutes.TryGetValue(currentGameId, out uint remainingMinutes) && remainingMinutes > 0) {
-												currentEntry.GameMinutes[currentGameId] = remainingMinutes - 1;
+										if (
+											Config?.PlayForGames.TryGetValue(
+												bot.BotName,
+												out PlayForEntry? currentEntry
+											) == true
+										) {
+											if (
+												currentEntry.GameMinutes.TryGetValue(
+													currentGameId,
+													out uint remainingMinutes
+												)
+												&& remainingMinutes > 0
+											) {
+												currentEntry.GameMinutes[currentGameId] =
+													remainingMinutes - 1;
 												currentEntry.LastUpdate = DateTime.UtcNow;
-												await SaveConfig(lockAlreadyHeld: true).ConfigureAwait(false);
+												await SaveConfig(lockAlreadyHeld: true)
+													.ConfigureAwait(false);
 											}
 
 											// Stop the game if no minutes remaining
-											if (currentEntry.GameMinutes.GetValueOrDefault(currentGameId) == 0) {
-												(bool success, string message) = await bot.Actions.Play([]).ConfigureAwait(false);
-												LogGenericDebug($"Stopped game {currentGameId}: {success}. {message}");
+											if (
+												currentEntry.GameMinutes.GetValueOrDefault(
+													currentGameId
+												) == 0
+											) {
+												(bool success, string message) = await bot
+													.Actions.Play([])
+													.ConfigureAwait(false);
+												LogGenericDebug(
+													$"Stopped game {currentGameId}: {success}. {message}"
+												);
 
-												await HandleGameCompletion(bot, currentGameId, lockAlreadyHeld: true).ConfigureAwait(false);
+												await HandleGameCompletion(
+														bot,
+														currentGameId,
+														lockAlreadyHeld: true
+													)
+													.ConfigureAwait(false);
 
 												// Find next game with remaining time
-												KeyValuePair<uint, uint> nextGame = currentEntry.GameMinutes
-													.Where(x => x.Value > 0)
+												KeyValuePair<uint, uint> nextGame = currentEntry
+													.GameMinutes.Where(x => x.Value > 0)
 													.OrderBy(x => x.Key)
 													.FirstOrDefault();
 
 												if (nextGame.Key != 0) {
-													(success, message) = await bot.Actions.Play([nextGame.Key]).ConfigureAwait(false);
-													LogGenericDebug($"Started next game {nextGame.Key}: {success}. {message}");
+													(success, message) = await bot
+														.Actions.Play([nextGame.Key])
+														.ConfigureAwait(false);
+													LogGenericDebug(
+														$"Started next game {nextGame.Key}: {success}. {message}"
+													);
 
 													// Schedule the next game
-													await ScheduleGamesImpl(bot, currentEntry).ConfigureAwait(false);
+													await ScheduleGamesImpl(bot, currentEntry)
+														.ConfigureAwait(false);
 												} else if (currentEntry.IdleGameId > 0) {
 													// If no next game but we have an idle game, start idling
-													if (!BotIdleModules.TryGetValue(bot, out IdleModule? module)) {
+													if (
+														!BotIdleModules.TryGetValue(
+															bot,
+															out IdleModule? module
+														)
+													) {
 														module = new IdleModule(bot);
 														BotIdleModules[bot] = module;
 													}
 													module.SetIdleGames(currentEntry.IdleGameId);
-													LogGenericInfo($"No more games to play, starting to idle {currentEntry.IdleGameId}");
+													LogGenericInfo(
+														$"No more games to play, starting to idle {currentEntry.IdleGameId}"
+													);
 												}
 											}
 										}
@@ -220,23 +266,29 @@ internal sealed class ASFTimedPlay : IGitHubPluginUpdates, IPlugin, IAsyncDispos
 									}
 								}
 							} catch (Exception ex) {
-								LogGenericError($"Error in timer callback for game {currentGameId}: {ex}");
+								LogGenericError(
+									$"Error in timer callback for game {currentGameId}: {ex}"
+								);
 							}
 						},
 						null,
 						dueTime, // First trigger exactly one minute from now
-						TimeSpan.FromSeconds(BufferedMinute)  // Subsequent triggers every minute
+						TimeSpan.FromSeconds(BufferedMinute) // Subsequent triggers every minute
 					);
 
 					if (Instance != null) {
 						Instance.ActiveTimers[bot] = playTimer;
-						LogGenericDebug($"Timer added to active timers for game {currentGameId} on bot {bot.BotName}");
+						LogGenericDebug(
+							$"Timer added to active timers for game {currentGameId} on bot {bot.BotName}"
+						);
 						playTimer = null; // Transfer ownership to ActiveTimers
 					}
 
 					// Start first game
 					LogGenericDebug($"Starting first game {currentGameId}");
-					(bool success, string message) = await bot.Actions.Play([currentGameId]).ConfigureAwait(false);
+					(bool success, string message) = await bot
+						.Actions.Play([currentGameId])
+						.ConfigureAwait(false);
 					LogGenericDebug($"Game start result: {success}. {message}");
 
 					if (!success) {
@@ -262,7 +314,11 @@ internal sealed class ASFTimedPlay : IGitHubPluginUpdates, IPlugin, IAsyncDispos
 		}
 	}
 
-	private static async Task HandleGameCompletion(Bot bot, uint gameId, bool lockAlreadyHeld = false) {
+	private static async Task HandleGameCompletion(
+		Bot bot,
+		uint gameId,
+		bool lockAlreadyHeld = false
+	) {
 		if (!lockAlreadyHeld) {
 			await ConfigLock.WaitAsync().ConfigureAwait(false);
 		}
@@ -288,7 +344,9 @@ internal sealed class ASFTimedPlay : IGitHubPluginUpdates, IPlugin, IAsyncDispos
 							module.SetIdleGames(entry.IdleGameId);
 							LogGenericInfo($"All games completed, now idling {entry.IdleGameId}");
 						} else {
-							LogGenericDebug($"No remaining games and no idle game, removing from PlayForGames");
+							LogGenericDebug(
+								$"No remaining games and no idle game, removing from PlayForGames"
+							);
 							_ = Config.PlayForGames.Remove(bot.BotName);
 						}
 					}
@@ -308,9 +366,7 @@ internal sealed class ASFTimedPlay : IGitHubPluginUpdates, IPlugin, IAsyncDispos
 		LogGenericInfo($"{Name} has been loaded!");
 		try {
 			// Initialize config here instead of constructor
-			Config ??= new TimedPlayConfig {
-				PlayForGames = []
-			};
+			Config ??= new TimedPlayConfig { PlayForGames = [] };
 
 			await LoadConfig().ConfigureAwait(false);
 
@@ -329,11 +385,15 @@ internal sealed class ASFTimedPlay : IGitHubPluginUpdates, IPlugin, IAsyncDispos
 
 			// Restore PlayFor sessions for this bot
 			if (Config.PlayForGames.TryGetValue(bot.BotName, out PlayForEntry? entry)) {
-				LogGenericInfo($"Restoring session for {bot.BotName}: {entry.GameMinutes.Count} games, IdleGameId: {entry.IdleGameId}");
+				LogGenericInfo(
+					$"Restoring session for {bot.BotName}: {entry.GameMinutes.Count} games, IdleGameId: {entry.IdleGameId}"
+				);
 
 				if (entry.GameMinutes.Count > 0) {
 					// If there are remaining minutes, start playing
-					LogGenericInfo($"Resuming games with remaining minutes: {string.Join(",", entry.GameMinutes.Keys)}");
+					LogGenericInfo(
+						$"Resuming games with remaining minutes: {string.Join(",", entry.GameMinutes.Keys)}"
+					);
 					await ScheduleGames(bot, entry).ConfigureAwait(false);
 				} else if (entry.IdleGameId > 0) {
 					// If no remaining minutes but there's an idle game, start idling
@@ -426,10 +486,12 @@ internal sealed class ASFTimedPlay : IGitHubPluginUpdates, IPlugin, IAsyncDispos
 
 			try {
 				// Don't interfere with ASF operations
-				if (!Bot.IsConnectedAndLoggedOn ||
-					Bot.BotConfig.GamesPlayedWhileIdle.Count > 0 ||
-					Bot.CardsFarmer.CurrentGamesFarmingReadOnly.Count > 0 ||
-					Bot.GamesToRedeemInBackgroundCount > 0) {
+				if (
+					!Bot.IsConnectedAndLoggedOn
+					|| Bot.BotConfig.GamesPlayedWhileIdle.Count > 0
+					|| Bot.CardsFarmer.CurrentGamesFarmingReadOnly.Count > 0
+					|| Bot.GamesToRedeemInBackgroundCount > 0
+				) {
 					return;
 				}
 
@@ -465,38 +527,5 @@ internal sealed class ASFTimedPlay : IGitHubPluginUpdates, IPlugin, IAsyncDispos
 	public Task OnBotInit(Bot bot) => Task.CompletedTask;
 
 	public Task OnBotDisconnected(Bot bot, EResult reason) => Task.CompletedTask;
-
-	private void ScheduleGames(IEnumerable<uint> gameIds, TimeSpan duration) {
-		foreach (uint gameId in gameIds) {
-			// Remove existing timer if present
-			if (GameTimers.TryRemove(gameId, out Timer? existingTimer)) {
-				existingTimer.Dispose();
-			}
-
-			Timer timer = new(
-				callback: _ => ScheduleGamesImpl(gameId),
-				state: null,
-				dueTime: duration,
-				period: Timeout.InfiniteTimeSpan  // Only trigger once
-			);
-
-			_ = GameTimers.TryAdd(gameId, timer);
-		}
-	}
-
-	private void ScheduleGamesImpl(uint gameId) {
-		if (GameTimers.TryRemove(gameId, out Timer? timer)) {
-			timer.Dispose();
-			LogGenericDebug($"Timer completed for game ${gameId}");
-
-			// Remove from config if present
-			if (Config?.PlayForGames != null) {
-				foreach (PlayForEntry entry in Config.PlayForGames.Values) {
-					_ = entry.GameMinutes.Remove(gameId);
-				}
-				_ = SaveConfig();
-			}
-		}
-	}
 }
 #pragma warning restore CA1812 // ASF uses this class during runtime

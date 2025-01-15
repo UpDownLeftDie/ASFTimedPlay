@@ -1,36 +1,46 @@
 {
-	"cSpell.words": [
-		"Archi",
-		"ARCHIBOT",
-		"botname",
-		"dpkg",
-		"esac",
-		"gitmodules",
-		"gpgsign",
-		"Lockdown",
-		"mavrosxristoforos",
-		"mpass",
-		"ncipollo",
-		"nodraft",
-		"nologo",
-		"OPTOUT",
-		"playfor",
-		"pwsh",
-		"signingkey",
-		"stopall",
-		"tzip",
-		"uninstantiated"
-	],
-	"dotnet.defaultSolution": "ASFTimedPlay.sln",
-	"files.exclude": {
-		"ArchiSteamFarm/": true
-	},
-	"search.exclude": {
-		"ArchiSteamFarm/": true
-	},
-	"omnisharp.enableEditorConfigSupport": true,
-	"omnisharp.enableRoslynAnalyzers": true,
-	"files.watcherExclude": {
-		"ArchiSteamFarm/": true
-	}
+  "cSpell.words": [
+    "Archi",
+    "ARCHIBOT",
+    "botname",
+    "dpkg",
+    "esac",
+    "gitmodules",
+    "gpgsign",
+    "Lockdown",
+    "mavrosxristoforos",
+    "mpass",
+    "ncipollo",
+    "nodraft",
+    "nologo",
+    "OPTOUT",
+    "playfor",
+    "pwsh",
+    "signingkey",
+    "stopall",
+    "tzip",
+    "uninstantiated"
+  ],
+  "dotnet.defaultSolution": "ASFTimedPlay.sln",
+  "files.exclude": {
+    "ArchiSteamFarm/": true
+  },
+  "search.exclude": {
+    "ArchiSteamFarm/": true
+  },
+  "omnisharp.enableEditorConfigSupport": true,
+  "files.watcherExclude": {
+    "ArchiSteamFarm/": true
+  },
+
+  "editor.formatOnSave": true,
+  "[csharp]": {
+    "editor.defaultFormatter": "ms-dotnettools.csharp",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.fixAll": "always",
+      "source.organizeImports": "always",
+      "source.fixAll.editorconfig": "always"
+    }
+  }
 }

@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using ArchiSteamFarm.Steam;
 using System.Globalization;
 using static ASFTimedPlay.Utils;
+using ArchiSteamFarm.Steam;
 
 namespace ASFTimedPlay.Commands;
 
@@ -13,7 +13,7 @@ internal static class PlayForCommand {
 		try {
 			LogGenericDebug($"PlayFor command started with args: {string.Join(" ", args)}");
 
-			string[] parameters = args.Skip(1).ToArray();
+			string[] parameters = [.. args.Skip(1)];
 			if (parameters.Length == 0) {
 				return bot.Commands.FormatBotResponse(
 					"Usage: !playfor [Bots] <AppID1,AppID2,...> <Minutes1,Minutes2,...>\n" +
@@ -43,7 +43,7 @@ internal static class PlayForCommand {
 				if (bots == null || bots.Count == 0) {
 					return bot.Commands.FormatBotResponse("No valid bots found!");
 				}
-				parameters = parameters.Skip(1).ToArray();
+				parameters = [.. parameters.Skip(1)];
 			}
 
 			LogGenericDebug($"Processing parameters: {string.Join(" ", parameters)}");
@@ -67,7 +67,7 @@ internal static class PlayForCommand {
 					// Get the last game ID before modifying the array
 					idleGame = uint.Parse(gameStrings[^1], CultureInfo.InvariantCulture);
 					// Then remove the idle game from gameStrings
-					gameStrings = gameStrings.Take(gameStrings.Length - 1).ToArray();
+					gameStrings = [.. gameStrings.Take(gameStrings.Length - 1)];
 				}
 			} else if (minuteStrings.Length == gameStrings.Length) {
 				// Check if last minute value is "*"
@@ -75,8 +75,8 @@ internal static class PlayForCommand {
 					// Get the last game ID before modifying arrays
 					idleGame = uint.Parse(gameStrings[^1], CultureInfo.InvariantCulture);
 					// Then remove the last game and minute
-					gameStrings = gameStrings.Take(gameStrings.Length - 1).ToArray();
-					minuteStrings = minuteStrings.Take(minuteStrings.Length - 1).ToArray();
+					gameStrings = [.. gameStrings.Take(gameStrings.Length - 1)];
+					minuteStrings = [.. minuteStrings.Take(minuteStrings.Length - 1)];
 				}
 			}
 

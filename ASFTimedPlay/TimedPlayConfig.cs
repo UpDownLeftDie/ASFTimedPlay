@@ -1,12 +1,10 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using System.Text.Json.Serialization;
 using JetBrains.Annotations;
 
 namespace ASFTimedPlay;
 
-[SuppressMessage("Performance", "CA1812:Avoid uninstantiated internal classes")]
 [UsedImplicitly]
 internal sealed class TimedPlayConfig {
 	[JsonRequired]

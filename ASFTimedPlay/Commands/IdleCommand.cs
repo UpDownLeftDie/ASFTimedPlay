@@ -8,7 +8,7 @@ namespace ASFTimedPlay.Commands;
 
 internal static class IdleCommand {
 	public static async Task<string?> Response(Bot bot, string[] args) {
-		string[] parameters = args.Skip(1).ToArray();
+		string[] parameters = [.. args.Skip(1)];
 
 		if (parameters.Length == 0) {
 			return await Task.FromResult<string?>(bot.Commands.FormatBotResponse(
@@ -32,7 +32,7 @@ internal static class IdleCommand {
 			if (bots == null || bots.Count == 0) {
 				return await Task.FromResult<string?>(bot.Commands.FormatBotResponse("No valid bots found!")).ConfigureAwait(false);
 			} else {
-				parameters = parameters.Skip(1).ToArray();
+				parameters = [.. parameters.Skip(1)];
 			}
 		}
 
