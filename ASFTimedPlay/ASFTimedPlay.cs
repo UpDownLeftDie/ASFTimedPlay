@@ -48,28 +48,29 @@ internal sealed class ASFTimedPlay
 
 	private static async Task LoadConfig() {
 		LogGenericDebug("Starting LoadConfig");
+
+		if (!File.Exists(ConfigPath)) {
+			LogGenericDebug($"Config file not found at path: {ConfigPath}");
+			LogGenericDebug("Creating new TimedPlayConfig object");
+
+			Config = new TimedPlayConfig { PlayForGames = [] };
+
+			LogGenericDebug("About to save new config file");
+			// Don't need lock for initial file creation
+			string json = Config.ToJsonText(true);
+			await File.WriteAllTextAsync(ConfigPath, json).ConfigureAwait(false);
+			LogGenericDebug($"Config properties - PlayForGames count: {Config.PlayForGames?.Count}");
+			return;
+		}
+
 		await ConfigLock.WaitAsync().ConfigureAwait(false);
-
 		try {
-			if (!File.Exists(ConfigPath)) {
-				LogGenericDebug($"Config file not found at path: {ConfigPath}");
-				LogGenericDebug("Creating new TimedPlayConfig object");
+			LogGenericDebug("Reading existing config file");
+			string json = await File.ReadAllTextAsync(ConfigPath).ConfigureAwait(false);
+			Config = json.ToJsonObject<TimedPlayConfig>();
 
-				Config = new TimedPlayConfig { PlayForGames = [] };
-
-				LogGenericDebug("About to save new config file");
-				await SaveConfig().ConfigureAwait(false);
-				LogGenericDebug(
-					$"Config properties - PlayForGames count: {Config.PlayForGames?.Count}"
-				);
-			} else {
-				LogGenericDebug("Reading existing config file");
-				string json = await File.ReadAllTextAsync(ConfigPath).ConfigureAwait(false);
-				Config = json.ToJsonObject<TimedPlayConfig>();
-
-				if (Config == null) {
-					throw new InvalidOperationException("Failed to deserialize config");
-				}
+			if (Config == null) {
+				throw new InvalidOperationException("Failed to deserialize config");
 			}
 
 			LogGenericDebug("Config loaded successfully");

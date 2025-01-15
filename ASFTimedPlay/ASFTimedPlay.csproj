@@ -14,11 +14,6 @@
                           ExcludeAssets="all"
                           Private="false" />
     </ItemGroup>
-    <ItemGroup>
-        <None Update="ASFTimedPlay.json">
-            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-        </None>
-    </ItemGroup>
     <Target Name="PostBuild"
             AfterTargets="PostBuildEvent">
         <Copy SourceFolders="$(TargetDir)"
