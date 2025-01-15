@@ -38,22 +38,11 @@ internal sealed class ASFTimedPlay : IGitHubPluginUpdates, IPlugin, IAsyncDispos
 		Path.GetDirectoryName(typeof(ASFTimedPlay).Assembly.Location) ?? "",
 		ConfigFile
 	);
-	private readonly Timer ConfigSaveTimer;
 	internal static readonly SemaphoreSlim ConfigLock = new(1, 1);
 
 	private readonly ConcurrentDictionary<uint, Timer> GameTimers = new();
 
-	public ASFTimedPlay() {
-		Instance = this;
-
-		// Only initialize the timer in constructor
-		ConfigSaveTimer = new Timer(
-			async _ => await SaveConfig().ConfigureAwait(false),
-			null,
-			TimeSpan.FromMinutes(5),
-			TimeSpan.FromMinutes(5)
-		);
-	}
+	public ASFTimedPlay() => Instance = this;
 
 	private static async Task LoadConfig() {
 		LogGenericDebug("Starting LoadConfig");
@@ -372,8 +361,6 @@ internal sealed class ASFTimedPlay : IGitHubPluginUpdates, IPlugin, IAsyncDispos
 	}
 
 	public async ValueTask DisposeAsync() {
-		await ConfigSaveTimer.DisposeAsync().ConfigureAwait(false);
-
 		await SaveConfig().ConfigureAwait(false);
 
 		foreach (Timer timer in ActiveTimers.Values) {
