@@ -77,8 +77,8 @@ internal static class IdleCommand {
 				entry.LastUpdate = DateTime.UtcNow;
 			}
 
-			if (!ASFTimedPlay.BotIdleModules.TryGetValue(targetBot, out ASFTimedPlay.IdleModule? module)) {
-				module = new ASFTimedPlay.IdleModule(targetBot);
+			if (!ASFTimedPlay.BotIdleModules.TryGetValue(targetBot, out IdleModule? module)) {
+				module = new IdleModule(targetBot);
 				ASFTimedPlay.BotIdleModules[targetBot] = module;
 			}
 
