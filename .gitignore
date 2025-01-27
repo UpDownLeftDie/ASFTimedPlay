@@ -1,3 +1,5 @@
+.env
+
 #     _     ____   _____
 #    / \   / ___| |  ___|
 #   / _ \  \___ \ | |_
@@ -382,8 +384,8 @@ ServiceFabricBackup/
 *.bim_*.settings
 *.rptproj.rsuser
 *- [Bb]ackup.rdl
-*- [Bb]ackup ([0-9]).rdl
-*- [Bb]ackup ([0-9][0-9]).rdl
+*- [Bb]ackup \([0-9]\).rdl
+*- [Bb]ackup \([0-9][0-9]\).rdl
 
 # Microsoft Fakes
 FakesAssemblies/
