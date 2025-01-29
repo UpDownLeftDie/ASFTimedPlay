@@ -44,6 +44,8 @@ internal sealed class ASFTimedPlay
 	);
 	internal static readonly SemaphoreSlim ConfigLock = new(1, 1);
 
+	internal readonly Dictionary<Bot, DateTime> TimerPausedAt = [];
+
 	public ASFTimedPlay() => Instance = this;
 
 	private static async Task LoadConfig() {
@@ -180,10 +182,27 @@ internal sealed class ASFTimedPlay
 					playTimer = new Timer(
 						async _ => {
 							try {
-								LogGenericDebug(
-									$"Timer callback triggered for game {currentGameId}"
-								);
+								LogGenericDebug($"Timer callback triggered for game {currentGameId}");
 								if (Instance != null) {
+									// Check if bot is actually playing the game
+									bool isPlayingGame = bot.IsConnectedAndLoggedOn;
+
+									if (!isPlayingGame) {
+										// Bot isn't playing the game - store current time if not already paused
+										if (!Instance.TimerPausedAt.ContainsKey(bot)) {
+											Instance.TimerPausedAt[bot] = DateTime.UtcNow;
+											LogGenericDebug($"Timer paused for bot {bot.BotName} at {DateTime.UtcNow}");
+										}
+										return;
+									}
+
+									// If we were paused, calculate how long we were paused
+									if (Instance.TimerPausedAt.TryGetValue(bot, out DateTime pausedAt)) {
+										TimeSpan pauseDuration = DateTime.UtcNow - pausedAt;
+										LogGenericDebug($"Timer was paused for {pauseDuration.TotalMinutes:F2} minutes");
+										_ = Instance.TimerPausedAt.Remove(bot);
+									}
+
 									// Update remaining minutes in config
 									await ConfigLock.WaitAsync().ConfigureAwait(false);
 									try {
