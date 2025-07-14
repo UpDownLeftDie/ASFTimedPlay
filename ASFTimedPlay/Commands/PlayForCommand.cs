@@ -17,8 +17,14 @@ internal static class PlayForCommand {
 			if (parameters.Length == 0) {
 				return bot.Commands.FormatBotResponse(
 					"Usage: !playfor [Bots] <AppID1,AppID2,...> <Minutes1,Minutes2,...>\n" +
-					"Use: \"!playfor stop\" to stop playing (keeps any idle game)\n" +
-					"Use: \"!playfor stopall\" to stop everything (including idling)"
+					"Examples:\n" +
+					"  !playfor 440,570 30,45,* → Play 440 for 30min, 570 for 45min, then idle both\n" +
+					"  !playfor 440,570,123,456 30,45,* → Play 440/570 for time, then idle 123/456\n" +
+					"Use: \"!playfor stop\" to stop playing (keeps any idle games)\n" +
+					"Use: \"!playfor stopall\" to stop everything (including idling)\n" +
+					"Use: \"!playfor status\" to check current status\n" +
+					"Maximum 32 games total\n" +
+					"Aliases: !pf (same as !playfor)"
 				);
 			}
 
@@ -30,6 +36,11 @@ internal static class PlayForCommand {
 			// Handle stopall command
 			if (parameters[0].Equals("stopall", StringComparison.OrdinalIgnoreCase)) {
 				return await CommandHelpers.HandleStopCommand(bot, stopIdleGame: true, stopPlayForGames: true).ConfigureAwait(false);
+			}
+
+			// Handle status command
+			if (parameters[0].Equals("status", StringComparison.OrdinalIgnoreCase)) {
+				return await CommandHelpers.HandleStatusCommand(bot).ConfigureAwait(false);
 			}
 
 			// Handle bot selection
@@ -56,27 +67,37 @@ internal static class PlayForCommand {
 
 			// Parse game IDs and handle idle marker (*)
 			List<uint> gameIds = [];
-			uint? idleGame = null;
+			List<uint> idleGames = [];
 			string[] gameStrings = parameters[0].Split(',');
 			string[] minuteStrings = parameters[1].Split(',');
+
+			// Check for 32-game limit
+			if (gameStrings.Length > 32) {
+				return bot.Commands.FormatBotResponse("Too many games specified! Maximum is 32 games.");
+			}
 
 			// If we have multiple games but single minute value
 			if (minuteStrings.Length == 1) {
 				string min = minuteStrings[0];
 				if (min == "*") {
-					// Get the last game ID before modifying the array
-					idleGame = uint.Parse(gameStrings[^1], CultureInfo.InvariantCulture);
-					// Then remove the idle game from gameStrings
-					gameStrings = [.. gameStrings.Take(gameStrings.Length - 1)];
+					// All games after the first are idle games
+					for (int i = 1; i < gameStrings.Length; i++) {
+						idleGames.Add(uint.Parse(gameStrings[i], CultureInfo.InvariantCulture));
+					}
+					// Keep only the first game for timed play
+					gameStrings = [gameStrings[0]];
 				}
 			} else if (minuteStrings.Length == gameStrings.Length) {
-				// Check if last minute value is "*"
-				if (minuteStrings[^1] == "*") {
-					// Get the last game ID before modifying arrays
-					idleGame = uint.Parse(gameStrings[^1], CultureInfo.InvariantCulture);
-					// Then remove the last game and minute
-					gameStrings = [.. gameStrings.Take(gameStrings.Length - 1)];
-					minuteStrings = [.. minuteStrings.Take(minuteStrings.Length - 1)];
+				// Check if any minute value is "*"
+				int starIndex = Array.IndexOf(minuteStrings, "*");
+				if (starIndex >= 0) {
+					// All games after the star are idle games
+					for (int i = starIndex; i < gameStrings.Length; i++) {
+						idleGames.Add(uint.Parse(gameStrings[i], CultureInfo.InvariantCulture));
+					}
+					// Keep only games before the star for timed play
+					gameStrings = [.. gameStrings.Take(starIndex)];
+					minuteStrings = [.. minuteStrings.Take(starIndex)];
 				}
 			}
 
@@ -116,7 +137,7 @@ internal static class PlayForCommand {
 						gameId => gameId,
 						gameId => minutes[gameIds.IndexOf(gameId)]
 					),
-					IdleGameId = idleGame ?? 0,
+					IdleGameIds = new HashSet<uint>(idleGames),
 					LastUpdate = DateTime.UtcNow
 				};
 
@@ -142,14 +163,17 @@ internal static class PlayForCommand {
 
 			string gamesInfo = string.Join(", ", gameIds.Select((id, index) =>
 				$"{id} for {minutes[index]} minutes"));
-			if (idleGame.HasValue) {
-				gamesInfo += $", {idleGame.Value} will be idled after completion";
+			if (idleGames.Count > 0) {
+				gamesInfo += $", {string.Join(",", idleGames)} will be idled after completion";
 			}
 
 			string botsText = string.Join(",", bots.Select(b => b.BotName));
 			string response = $"Now playing: {gamesInfo} on {botsText}";
 			LogGenericDebug($"Sending response: {response}");
-			return bot.Commands.FormatBotResponse(response);
+
+			// Use the first bot in the list to format the response, or the current bot if only one target
+			Bot responseBot = bots.Count == 1 ? bots.First() : bot;
+			return responseBot.Commands.FormatBotResponse(response);
 		} catch (Exception ex) {
 			LogGenericError($"PlayFor command failed: {ex}");
 			return bot.Commands.FormatBotResponse($"Command failed: {ex.Message}");

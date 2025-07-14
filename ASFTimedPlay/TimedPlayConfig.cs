@@ -16,8 +16,20 @@ internal sealed class PlayForEntry {
 	public Dictionary<uint, uint> GameMinutes { get; set; } = [];
 
 	[JsonRequired]
-	public uint IdleGameId { get; set; }
+	public HashSet<uint> IdleGameIds { get; set; } = [];
 
 	[JsonRequired]
 	public DateTime LastUpdate { get; set; }
+
+	// Handle single IdleGameId
+	// [JsonIgnore]
+	// public uint IdleGameId {
+	// 	get => IdleGameIds.FirstOrDefault();
+	// 	set {
+	// 		IdleGameIds.Clear();
+	// 		if (value > 0) {
+	// 			IdleGameIds.Add(value);
+	// 		}
+	// 	}
+	// }
 }

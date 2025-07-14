@@ -13,20 +13,25 @@ internal sealed class IdleModule : IDisposable {
 	public Version Version =>
 			typeof(ASFTimedPlay).Assembly.GetName().Version
 			?? throw new InvalidOperationException(nameof(Version));
-	private HashSet<uint> IdleGameId = [];
+	private HashSet<uint> IdleGameIds = [];
 	private readonly SemaphoreSlim IdleLock = new(1, 1);
 
 	internal IdleModule(Bot bot) => Bot = bot ?? throw new ArgumentNullException(nameof(bot));
 
 	public void SetIdleGames(uint gameId) {
-		IdleGameId = [gameId];
+		IdleGameIds = [gameId];
 		_ = TryIdleGames();
 	}
 
-	public void StopIdling() => IdleGameId = [];
+	public void SetIdleGames(IEnumerable<uint> gameIds) {
+		IdleGameIds = new HashSet<uint>(gameIds);
+		_ = TryIdleGames();
+	}
+
+	public void StopIdling() => IdleGameIds = [];
 
 	private async Task TryIdleGames() {
-		if (IdleGameId.Count == 0) {
+		if (IdleGameIds.Count == 0) {
 			return;
 		}
 
@@ -43,9 +48,9 @@ internal sealed class IdleModule : IDisposable {
 				return;
 			}
 
-			_ = await Bot.Actions.Play(IdleGameId).ConfigureAwait(false);
+			_ = await Bot.Actions.Play(IdleGameIds).ConfigureAwait(false);
 			LogGenericDebug(
-					$"Resumed idling game {string.Join(",", IdleGameId)} for {Bot.BotName}"
+					$"Resumed idling games {string.Join(",", IdleGameIds)} for {Bot.BotName}"
 			);
 		} finally {
 			_ = IdleLock.Release();

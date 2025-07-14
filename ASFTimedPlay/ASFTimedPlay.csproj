@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
         <OutputType>Library</OutputType>
+        <InternalsVisibleTo>ASFTimedPlay.Tests</InternalsVisibleTo>
     </PropertyGroup>
     <ItemGroup>
         <PackageReference Include="JetBrains.Annotations"
