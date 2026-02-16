@@ -8,34 +8,34 @@ using ArchiSteamFarm.Steam;
 
 namespace ASFTimedPlay.Commands;
 
-internal static class PlayForCommand {
+public static class TimedPlayCommand {
 	public static async Task<string?> Response(Bot bot, string[] args) {
 		try {
-			LogGenericDebug($"PlayFor command started with args: {string.Join(" ", args)}");
+			LogGenericDebug($"TimedPlay command started with args: {string.Join(" ", args)}");
 
 			string[] parameters = [.. args.Skip(1)];
 			if (parameters.Length == 0) {
 				return bot.Commands.FormatBotResponse(
-					"Usage: !playfor [Bots] <AppID1,AppID2,...> <Minutes1,Minutes2,...>\n" +
+					"Usage: !timedplay [Bots] <AppID1,AppID2,...> <Duration1,Duration2,...>\n" +
+					"Durations: MM (minutes), HH:MM, DD:HH:MM, or 10h45m / 1d 2h\n" +
 					"Examples:\n" +
-					"  !playfor 440,570 30,45,* → Play 440 for 30min, 570 for 45min, then idle both\n" +
-					"  !playfor 440,570,123,456 30,45,* → Play 440/570 for time, then idle 123/456\n" +
-					"Use: \"!playfor stop\" to stop playing (keeps any idle games)\n" +
-					"Use: \"!playfor stopall\" to stop everything (including idling)\n" +
-					"Use: \"!playfor status\" to check current status\n" +
-					"Maximum 32 games total\n" +
-					"Aliases: !pf (same as !playfor)"
+					"  !timedplay 440 2000 → 440 for 2000 min (or use 33:20 or 1:9:20)\n" +
+					"  !timedplay 440,100 8:30,70 → 440 for 8h30m, 100 for 70 min\n" +
+					"  !timedplay 440,570 2h,45,* → Play 440/570 for time, then idle both\n" +
+					"Use: \"!timedplay stop\" / \"!timedplay stopall\" / \"!timedplay status\"\n" +
+					"Max 32 games. Extra games use the last duration.\n" +
+					"Aliases: !tp, !pf"
 				);
 			}
 
 			// Handle stop command
 			if (parameters[0].Equals("stop", StringComparison.OrdinalIgnoreCase)) {
-				return await CommandHelpers.HandleStopCommand(bot, stopIdleGame: false, stopPlayForGames: true).ConfigureAwait(false);
+				return await CommandHelpers.HandleStopCommand(bot, stopIdleGame: false, stopTimedPlayGames: true).ConfigureAwait(false);
 			}
 
 			// Handle stopall command
 			if (parameters[0].Equals("stopall", StringComparison.OrdinalIgnoreCase)) {
-				return await CommandHelpers.HandleStopCommand(bot, stopIdleGame: true, stopPlayForGames: true).ConfigureAwait(false);
+				return await CommandHelpers.HandleStopCommand(bot, stopIdleGame: true, stopTimedPlayGames: true).ConfigureAwait(false);
 			}
 
 			// Handle status command
@@ -109,30 +109,35 @@ internal static class PlayForCommand {
 				gameIds.Add(gameId);
 			}
 
-			// Parse minutes
+			// Parse durations (MM, HH:MM, DD:HH:MM, or 10h 45m / 1d 2h). Extra games use the last value.
 			List<uint> minutes = [];
 			if (minuteStrings.Length == 1 && gameIds.Count > 0) {
-				// Single minute value for all games
-				if (!uint.TryParse(minuteStrings[0], out uint minuteValue) || minuteValue == 0) {
-					return bot.Commands.FormatBotResponse($"Invalid minutes value: {minuteStrings[0]}");
+				if (!DurationParser.TryParse(minuteStrings[0], out uint minuteValue) || minuteValue == 0) {
+					return bot.Commands.FormatBotResponse($"Invalid duration: {minuteStrings[0]} (use MM, HH:MM, DD:HH:MM, or 10h45m)");
 				}
 				minutes.AddRange(Enumerable.Repeat(minuteValue, gameIds.Count));
 			} else {
-				// Individual minute values
-				if (minuteStrings.Length != gameIds.Count) {
-					return bot.Commands.FormatBotResponse("Number of minute values must match number of games!");
+				if (minuteStrings.Length == 0) {
+					return bot.Commands.FormatBotResponse("Please provide at least one duration value.");
 				}
-
 				foreach (string min in minuteStrings) {
-					if (!uint.TryParse(min, out uint minuteValue) || minuteValue == 0) {
-						return bot.Commands.FormatBotResponse($"Invalid minutes value: {min}");
+					if (!DurationParser.TryParse(min, out uint minuteValue) || minuteValue == 0) {
+						return bot.Commands.FormatBotResponse($"Invalid duration: {min} (use MM, HH:MM, DD:HH:MM, or 10h45m)");
 					}
 					minutes.Add(minuteValue);
+				}
+				// Pad with last minute value for any extra games
+				while (minutes.Count < gameIds.Count) {
+					minutes.Add(minutes[^1]);
+				}
+				// If more minute values than games, use only the first gameIds.Count
+				if (minutes.Count > gameIds.Count) {
+					minutes = minutes.Take(gameIds.Count).ToList();
 				}
 			}
 
 			foreach (Bot targetBot in bots) {
-				PlayForEntry entry = new() {
+				TimedPlayEntry entry = new() {
 					GameMinutes = gameIds.ToDictionary(
 						gameId => gameId,
 						gameId => minutes[gameIds.IndexOf(gameId)]
@@ -150,7 +155,7 @@ internal static class PlayForCommand {
 					await ASFTimedPlay.ConfigLock.WaitAsync().ConfigureAwait(false);
 					lockTaken = true;
 
-					ASFTimedPlay.Config.PlayForGames[targetBot.BotName] = entry;
+					ASFTimedPlay.Config.TimedPlayGames[targetBot.BotName] = entry;
 
 					await ASFTimedPlay.SaveConfig(lockAlreadyHeld: true).ConfigureAwait(false);
 					await ASFTimedPlay.ScheduleGames(targetBot, entry).ConfigureAwait(false);
@@ -167,15 +172,16 @@ internal static class PlayForCommand {
 				gamesInfo += $", {string.Join(",", idleGames)} will be idled after completion";
 			}
 
-			string botsText = string.Join(",", bots.Select(b => b.BotName));
-			string response = $"Now playing: {gamesInfo} on {botsText}";
-			LogGenericDebug($"Sending response: {response}");
+			string responseMessage = $"Now playing: {gamesInfo}";
+			LogGenericDebug($"Sending response: {responseMessage}");
 
-			// Use the first bot in the list to format the response, or the current bot if only one target
-			Bot responseBot = bots.Count == 1 ? bots.First() : bot;
-			return responseBot.Commands.FormatBotResponse(response);
+			// Match ASF built-in commands: one line per target bot with that bot's name in angle brackets
+			return string.Join(
+				Environment.NewLine,
+				bots.Select(b => b.Commands.FormatBotResponse(responseMessage))
+			);
 		} catch (Exception ex) {
-			LogGenericError($"PlayFor command failed: {ex}");
+			LogGenericError($"TimedPlay command failed: {ex}");
 			return bot.Commands.FormatBotResponse($"Command failed: {ex.Message}");
 		}
 	}

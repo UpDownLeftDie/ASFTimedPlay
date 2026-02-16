@@ -8,10 +8,10 @@ namespace ASFTimedPlay;
 [UsedImplicitly]
 internal sealed class TimedPlayConfig {
 	[JsonRequired]
-	public Dictionary<string, PlayForEntry> PlayForGames { get; set; } = [];
+	public Dictionary<string, TimedPlayEntry> TimedPlayGames { get; set; } = [];
 }
 
-internal sealed class PlayForEntry {
+internal sealed class TimedPlayEntry {
 	[JsonRequired]
 	public Dictionary<uint, uint> GameMinutes { get; set; } = [];
 
@@ -20,16 +20,4 @@ internal sealed class PlayForEntry {
 
 	[JsonRequired]
 	public DateTime LastUpdate { get; set; }
-
-	// Handle single IdleGameId
-	// [JsonIgnore]
-	// public uint IdleGameId {
-	// 	get => IdleGameIds.FirstOrDefault();
-	// 	set {
-	// 		IdleGameIds.Clear();
-	// 		if (value > 0) {
-	// 			IdleGameIds.Add(value);
-	// 		}
-	// 	}
-	// }
 }

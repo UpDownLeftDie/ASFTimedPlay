@@ -6,7 +6,7 @@ env:
   CONFIGURATION: Release
   DOTNET_CLI_TELEMETRY_OPTOUT: true
   DOTNET_NOLOGO: true
-  DOTNET_SDK_VERSION: 9.0
+  DOTNET_SDK_VERSION: 10.0
   GPG_PRIVATE_KEY: ${{ secrets.ARCHIBOT_GPG_PRIVATE_KEY }} # Optional, if secret not provided, will skip signing SHA512SUMS with GPG key. You can specify your own credentials if you'd like to, simply change ARCHIBOT_GPG_PRIVATE_KEY here to the one you want to use
 
 permissions:
@@ -26,13 +26,13 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4.2.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           show-progress: false
           submodules: recursive
 
       - name: Setup .NET Core
-        uses: actions/setup-dotnet@v4.2.0
+        uses: actions/setup-dotnet@baa11fbfe1d6520db94683bd5c7a3818018e4309 # v5.1.0
         with:
           dotnet-version: ${{ env.DOTNET_SDK_VERSION }}
 
@@ -41,7 +41,7 @@ jobs:
 
       - name: Parse plugin name from Directory.Build.props
         id: plugin-name
-        uses: mavrosxristoforos/get-xml-info@2.0
+        uses: mavrosxristoforos/get-xml-info@afaa5058ead44cfaff92c6a861b46dd7a8929f60 # 2.0
         with:
           xml-file: "Directory.Build.props"
           xpath: "//PluginName"
@@ -129,8 +129,9 @@ jobs:
           }
 
       - name: Upload plugin artifact
-        uses: actions/upload-artifact@v4.5.0
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
+          compression-level: 1
           if-no-files-found: error
           name: ${{ matrix.os }}_${{ steps.plugin-name.outputs.info }}
           path: out/${{ steps.plugin-name.outputs.info }}.zip
@@ -145,18 +146,18 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4.2.2
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           show-progress: false
 
       - name: Download plugin artifact from ubuntu-latest
-        uses: actions/download-artifact@v4.1.8
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
         with:
           name: ubuntu-latest_${{ needs.publish.outputs.PLUGIN_NAME }}
           path: out
 
       - name: Import GPG key for signing
-        uses: crazy-max/ghaction-import-gpg@v6.2.0
+        uses: crazy-max/ghaction-import-gpg@e89d40939c28e39f97cf32126055eeae86ba74ec # v6.3.0
         if: ${{ env.GPG_PRIVATE_KEY != null }}
         with:
           gpg_private_key: ${{ env.GPG_PRIVATE_KEY }}
@@ -177,27 +178,30 @@ jobs:
           )
 
       - name: Upload SHA512SUMS
-        uses: actions/upload-artifact@v4.5.0
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         with:
+          compression-level: 1
           if-no-files-found: error
           name: SHA512SUMS
           path: out/SHA512SUMS
 
       - name: Upload SHA512SUMS.sign
-        uses: actions/upload-artifact@v4.5.0
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
         if: ${{ env.GPG_PRIVATE_KEY != null }}
         with:
+          compression-level: 1
           if-no-files-found: error
           name: SHA512SUMS.sign
           path: out/SHA512SUMS.sign
 
       - name: Create GitHub release
-        uses: ncipollo/release-action@v1.14.0
+        uses: ncipollo/release-action@b7eabc95ff50cbeeedec83973935c8f306dfcd0b # v1.20.0
         with:
           allowUpdates: true
           artifactErrorsFailBuild: true
           artifacts: "out/*"
           bodyFile: .github/RELEASE_TEMPLATE.md
+          immutableCreate: true
           makeLatest: false
           name: ${{ needs.publish.outputs.PLUGIN_NAME }} V${{ github.ref_name }}
           prerelease: true

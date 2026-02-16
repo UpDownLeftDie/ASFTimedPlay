@@ -10,13 +10,13 @@ using Timer = System.Threading.Timer;
 namespace ASFTimedPlay.Commands;
 
 internal static class CommandHelpers {
-	public static async Task<string?> HandleStopCommand(Bot bot, bool stopIdleGame = true, bool stopPlayForGames = true) {
-		if (Config?.PlayForGames.TryGetValue(bot.BotName, out PlayForEntry? entry) == true) {
+	public static async Task<string?> HandleStopCommand(Bot bot, bool stopIdleGame = true, bool stopTimedPlayGames = true) {
+		if (Config?.TimedPlayGames.TryGetValue(bot.BotName, out TimedPlayEntry? entry) == true) {
 			bool madeChanges = false;
 			HashSet<uint> idleGamesToResume = [];
 
-			// If we're only stopping PlayFor games and there are idle games, remember them
-			if (!stopIdleGame && stopPlayForGames && entry.IdleGameIds.Count > 0) {
+			// If we're only stopping timed play games and there are idle games, remember them
+			if (!stopIdleGame && stopTimedPlayGames && entry.IdleGameIds.Count > 0) {
 				idleGamesToResume = new HashSet<uint>(entry.IdleGameIds);
 			}
 
@@ -32,8 +32,8 @@ internal static class CommandHelpers {
 				madeChanges = true;
 			}
 
-			// Clear PlayFor games if requested
-			if (stopPlayForGames && entry.GameMinutes.Count > 0) {
+			// Clear timed play games if requested
+			if (stopTimedPlayGames && entry.GameMinutes.Count > 0) {
 				entry.GameMinutes.Clear();
 				madeChanges = true;
 
@@ -50,10 +50,14 @@ internal static class CommandHelpers {
 					LogGenericDebug($"Cleared timer start time for bot {bot.BotName}");
 				}
 
-				// Also clear any paused timer state
-				if (Instance != null && Instance.TimerPausedAt.ContainsKey(bot)) {
-					_ = Instance.TimerPausedAt.Remove(bot);
-					LogGenericDebug($"Cleared paused timer state for bot {bot.BotName}");
+				// Also clear any paused timer state and wall-clock tracking
+				if (Instance != null) {
+					if (Instance.TimerPausedAt.ContainsKey(bot)) {
+						_ = Instance.TimerPausedAt.Remove(bot);
+						LogGenericDebug($"Cleared paused timer state for bot {bot.BotName}");
+					}
+					_ = Instance.GameDurationMinutes.Remove(bot);
+					_ = Instance.TotalPausedDuration.Remove(bot);
 				}
 			}
 
@@ -77,10 +81,10 @@ internal static class CommandHelpers {
 				}
 			}
 
-			string message = (stopIdleGame, stopPlayForGames) switch {
+			string message = (stopIdleGame, stopTimedPlayGames) switch {
 				(true, true) => "Stopped all games and idling",
 				(true, false) => "Stopped idling games",
-				(false, true) => "Stopped playfor games and resumed idling",
+				(false, true) => "Stopped timed play and resumed idling",
 				_ => "No changes made"
 			};
 
@@ -91,10 +95,10 @@ internal static class CommandHelpers {
 	}
 
 	public static Task<string?> HandleStatusCommand(Bot bot) {
-		if (Config?.PlayForGames.TryGetValue(bot.BotName, out PlayForEntry? entry) == true) {
+		if (Config?.TimedPlayGames.TryGetValue(bot.BotName, out TimedPlayEntry? entry) == true) {
 			List<string> statusParts = [];
 
-			// Check if there are active PlayFor games
+			// Check if there are active timed play games
 			if (entry.GameMinutes.Count > 0) {
 				string gamesStatus = string.Join(", ", entry.GameMinutes.Select(kvp =>
 					$"{kvp.Key} ({kvp.Value} minutes remaining)"));
@@ -127,6 +131,6 @@ internal static class CommandHelpers {
 			}
 		}
 
-		return Task.FromResult(bot.Commands.FormatBotResponse("No active PlayFor games or idle games"));
+		return Task.FromResult(bot.Commands.FormatBotResponse("No active timed play or idle games"));
 	}
 }

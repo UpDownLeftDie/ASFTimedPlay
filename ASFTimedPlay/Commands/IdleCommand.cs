@@ -20,7 +20,7 @@ internal static class IdleCommand {
 
 		// Handle stop command
 		if (parameters[0].Equals("stop", StringComparison.OrdinalIgnoreCase)) {
-			return await CommandHelpers.HandleStopCommand(bot, stopIdleGame: true, stopPlayForGames: false).ConfigureAwait(false);
+			return await CommandHelpers.HandleStopCommand(bot, stopIdleGame: true, stopTimedPlayGames: false).ConfigureAwait(false);
 		}
 
 		// Handle bot selection
@@ -81,9 +81,9 @@ internal static class IdleCommand {
 
 			// Update config with new idle games
 			if (ASFTimedPlay.Config != null) {
-				if (!ASFTimedPlay.Config.PlayForGames.TryGetValue(targetBot.BotName, out PlayForEntry? entry)) {
-					entry = new PlayForEntry();
-					ASFTimedPlay.Config.PlayForGames[targetBot.BotName] = entry;
+				if (!ASFTimedPlay.Config.TimedPlayGames.TryGetValue(targetBot.BotName, out TimedPlayEntry? entry)) {
+					entry = new TimedPlayEntry();
+					ASFTimedPlay.Config.TimedPlayGames[targetBot.BotName] = entry;
 				}
 				entry.IdleGameIds = new HashSet<uint>(gameIds);
 				entry.LastUpdate = DateTime.UtcNow;
