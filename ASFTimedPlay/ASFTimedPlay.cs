@@ -79,6 +79,13 @@ internal sealed class ASFTimedPlay
 				throw new InvalidOperationException("Failed to deserialize config");
 			}
 
+			// Ensure required collections exist (handles empty {} or old config format)
+			Config.TimedPlayGames ??= [];
+			foreach (TimedPlayEntry entry in Config.TimedPlayGames.Values) {
+				entry.GameMinutes ??= [];
+				entry.IdleGameIds ??= [];
+			}
+
 			LogGenericDebug("Config loaded successfully");
 		} catch (Exception ex) {
 			LogGenericError($"Error loading config: {ex}");
