@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using ArchiSteamFarm.Helpers.Json;
 using ArchiSteamFarm.Steam;
 using static ASFTimedPlay.ASFTimedPlay;
 using static ASFTimedPlay.Utils;
@@ -114,6 +116,11 @@ internal static class CommandHelpers {
 				} else {
 					statusParts.Add("Timer: INACTIVE");
 				}
+				if (entry.SequentialMode) {
+					statusParts.Add("Mode: sequential");
+				} else {
+					statusParts.Add("Mode: concurrent");
+				}
 			}
 
 						// Check idle games
@@ -129,5 +136,39 @@ internal static class CommandHelpers {
 		}
 
 		return Task.FromResult<string?>(bot.Commands.FormatBotResponse("No active timed play or idle games"));
+	}
+
+	public static async Task<string?> HandleDebugCommand(Bot bot) {
+		Version? version = typeof(CommandHelpers).Assembly.GetName().Version;
+		string versionStr = version?.ToString(3) ?? "?.?.?";
+		string configPath = ConfigPath;
+		bool configExists = File.Exists(configPath);
+
+		string configJson;
+		await ConfigLock.WaitAsync().ConfigureAwait(false);
+		try {
+			configJson = Config != null ? Config.ToJsonText(true) : "null";
+		} finally {
+			_ = ConfigLock.Release();
+		}
+
+		int activeTimerCount = Instance?.ActiveTimers.Count ?? 0;
+		int botsWithEntries = Config?.TimedPlayGames.Count ?? 0;
+		string botNames = Config?.TimedPlayGames.Count > 0
+			? string.Join(", ", Config.TimedPlayGames.Keys)
+			: "(none)";
+
+		string debug = string.Join(
+			"\n",
+			"[ASFTimedPlay Debug]",
+			$"Version: {versionStr}",
+			$"Config path: {configPath}",
+			$"Config file exists: {configExists}",
+			$"Active timers: {activeTimerCount} | Bots with entries: {botsWithEntries} ({botNames})",
+			"--- Config JSON ---",
+			configJson
+		);
+
+		return bot.Commands.FormatBotResponse(debug);
 	}
 }

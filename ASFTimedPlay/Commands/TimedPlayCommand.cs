@@ -23,8 +23,8 @@ public static class TimedPlayCommand {
 					"  !timedplay 440 2000 → 440 for 2000 min (or use 33:20 or 1:9:20)\n" +
 					"  !timedplay 440,100 8:30,70 → 440 for 8h30m, 100 for 70 min\n" +
 					"  !timedplay 440,570 2h,45,* → Play 440/570 for time, then idle both\n" +
-					"Use: \"!timedplay stop\" / \"!timedplay stopall\" / \"!timedplay status\" (or \"!timedplay <Bot> status\" for a specific bot)\n" +
-					"Max 32 games. Extra games use the last duration.\n" +
+					"Use: \"!timedplay stop\" / \"!timedplay stopall\" / \"!timedplay status\" / \"!timedplay debug\"\n" +
+					"Add \"sequential\" or \"seq\" at the end to play one game at a time. Max 32 games.\n" +
 					"Aliases: !tp, !pf"
 				);
 			}
@@ -44,6 +44,11 @@ public static class TimedPlayCommand {
 				return await CommandHelpers.HandleStatusCommand(bot).ConfigureAwait(false);
 			}
 
+			// Handle debug command
+			if (parameters[0].Equals("debug", StringComparison.OrdinalIgnoreCase)) {
+				return await CommandHelpers.HandleDebugCommand(bot).ConfigureAwait(false);
+			}
+
 			// Handle bot selection
 			HashSet<Bot>? bots;
 			if (parameters[0].Contains(',', StringComparison.Ordinal) || uint.TryParse(parameters[0], out _)) {
@@ -58,8 +63,11 @@ public static class TimedPlayCommand {
 				parameters = [.. parameters.Skip(1)];
 			}
 
-			// Subcommands with optional bot prefix: "!timedplay status" or "!timedplay xz3r0 status"
+			// Subcommands with optional bot prefix: "!timedplay status" or "!timedplay bot debug"
 			if (parameters.Length == 1) {
+				if (parameters[0].Equals("debug", StringComparison.OrdinalIgnoreCase)) {
+					return await CommandHelpers.HandleDebugCommand(bot).ConfigureAwait(false);
+				}
 				if (parameters[0].Equals("status", StringComparison.OrdinalIgnoreCase)) {
 					var results = new List<string?>();
 					foreach (Bot b in bots) {
@@ -84,6 +92,16 @@ public static class TimedPlayCommand {
 			}
 
 			LogGenericDebug($"Processing parameters: {string.Join(" ", parameters)}");
+
+			// Optional "sequential" or "seq" flag at the end
+			bool sequentialMode = false;
+			if (parameters.Length >= 3) {
+				string last = parameters[^1];
+				if (last.Equals("sequential", StringComparison.OrdinalIgnoreCase) || last.Equals("seq", StringComparison.OrdinalIgnoreCase)) {
+					sequentialMode = true;
+					parameters = [.. parameters.Take(parameters.Length - 1)];
+				}
+			}
 
 			if (parameters.Length < 2) {
 				return bot.Commands.FormatBotResponse(
@@ -169,7 +187,8 @@ public static class TimedPlayCommand {
 						gameId => minutes[gameIds.IndexOf(gameId)]
 					),
 					IdleGameIds = new HashSet<uint>(idleGames),
-					LastUpdate = DateTime.UtcNow
+					LastUpdate = DateTime.UtcNow,
+					SequentialMode = sequentialMode
 				};
 
 				if (ASFTimedPlay.Config == null) {
@@ -196,6 +215,9 @@ public static class TimedPlayCommand {
 				$"{id} for {minutes[index]} minutes"));
 			if (idleGames.Count > 0) {
 				gamesInfo += $", {string.Join(",", idleGames)} will be idled after completion";
+			}
+			if (sequentialMode) {
+				gamesInfo += " (sequential)";
 			}
 
 			string responseMessage = $"Now playing: {gamesInfo}";

@@ -171,10 +171,11 @@ internal sealed class ASFTimedPlay
 				_ = Instance.ActiveTimers.Remove(bot);
 			}
 
-			// Build set of games to play concurrently (up to ASF limit of 32)
+			// Build set of games to play (concurrent up to 32, or single game when SequentialMode)
+			int take = entry.SequentialMode ? 1 : MaxConcurrentGames;
 			List<uint> gamesToPlay = entry.GameMinutes
 				.Where(x => x.Value > 0)
-				.Take(MaxConcurrentGames)
+				.Take(take)
 				.Select(x => x.Key)
 				.ToList();
 
@@ -217,9 +218,11 @@ internal sealed class ASFTimedPlay
 				}
 			}
 
-			// Start playing all games concurrently
+			// Start playing game(s)
 			HashSet<uint> set = [.. gamesToPlay];
-			LogGenericDebug($"Starting {set.Count} game(s) concurrently: {string.Join(",", set)}");
+			LogGenericDebug(entry.SequentialMode
+				? $"Starting 1 game (sequential): {string.Join(",", set)}"
+				: $"Starting {set.Count} game(s) concurrently: {string.Join(",", set)}");
 			(bool success, string message) = await bot.Actions.Play(set).ConfigureAwait(false);
 			LogGenericDebug($"Play result: {success}. {message}");
 
@@ -358,6 +361,12 @@ internal sealed class ASFTimedPlay
 				LogGenericDebug($"Stopped games: {success}. {message}");
 				_ = instance.GameStartTimes.Remove(bot);
 				_ = instance.GameDurationMinutes.Remove(bot);
+
+				// Sequential mode: if more games remain, schedule the next one
+				if (currentEntry.SequentialMode && currentEntry.GameMinutes.Count > 0) {
+					await ScheduleGamesImpl(bot, currentEntry).ConfigureAwait(false);
+					return;
+				}
 
 				if (currentEntry.IdleGameIds.Count > 0) {
 					if (!BotIdleModules.TryGetValue(bot, out IdleModule? module)) {

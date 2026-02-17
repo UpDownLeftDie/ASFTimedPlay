@@ -13,4 +13,5 @@ internal sealed class TimedPlayEntry {
 	public Dictionary<uint, uint> GameMinutes { get; set; } = [];
 	public HashSet<uint> IdleGameIds { get; set; } = [];
 	public DateTime LastUpdate { get; set; }
+	public bool SequentialMode { get; set; }
 }
