@@ -1,23 +1,16 @@
 using System;
 using System.Collections.Generic;
-using System.Text.Json.Serialization;
 using JetBrains.Annotations;
 
 namespace ASFTimedPlay;
 
 [UsedImplicitly]
 internal sealed class TimedPlayConfig {
-	[JsonRequired]
-	public Dictionary<string, PlayForEntry> PlayForGames { get; set; } = [];
+	public Dictionary<string, TimedPlayEntry> TimedPlayGames { get; set; } = [];
 }
 
-internal sealed class PlayForEntry {
-	[JsonRequired]
+internal sealed class TimedPlayEntry {
 	public Dictionary<uint, uint> GameMinutes { get; set; } = [];
-
-	[JsonRequired]
-	public uint IdleGameId { get; set; }
-
-	[JsonRequired]
+	public HashSet<uint> IdleGameIds { get; set; } = [];
 	public DateTime LastUpdate { get; set; }
 }

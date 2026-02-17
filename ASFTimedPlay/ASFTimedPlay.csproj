@@ -1,6 +1,8 @@
+<?xml version="1.0" encoding="UTF-8" ?>
 <Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
         <OutputType>Library</OutputType>
+        <InternalsVisibleTo>ASFTimedPlay.Tests</InternalsVisibleTo>
     </PropertyGroup>
     <ItemGroup>
         <PackageReference Include="JetBrains.Annotations"
@@ -11,7 +13,7 @@
     </ItemGroup>
     <ItemGroup>
         <ProjectReference Include="..\ArchiSteamFarm\ArchiSteamFarm\ArchiSteamFarm.csproj"
-                          ExcludeAssets="all"
+                          ExcludeAssets="analyzers;build"
                           Private="false" />
     </ItemGroup>
     <Target Name="PostBuild"

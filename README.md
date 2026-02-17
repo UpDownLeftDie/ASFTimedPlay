@@ -1,62 +1,122 @@
-# ASFTimedPlay
+# ASF Timed Play Plugin
 
-[![Steam donate](https://img.shields.io/badge/Steam-donate-000000.svg?logo=steam)](https://steamcommunity.com/tradeoffer/new/?partner=17031731&token=UO4iqr4V)
-[![Patreon](https://img.shields.io/badge/Patreon-support-000000.svg?logo=patreon)](https://www.patreon.com/camkitties)
-[![Twitch](https://img.shields.io/badge/Twitch-CamKitties-000000.svg?logo=twitch)](https://www.twitch.tv/camkitties)
-[![Twitch](https://img.shields.io/badge/Twitch-UpDownLeftDie-000000.svg?logo=twitch)](https://www.twitch.tv/updownleftdie)
-
-<!-- [![BTC donate](https://img.shields.io/badge/BTC-donate-f7931a.svg?logo=bitcoin)](https://www.blockchain.com/explorer/addresses/btc/3HwcgZbtoF5vSxJkNUvThVSJipKi7r5EqU)
-[![ETH donate](https://img.shields.io/badge/ETH-donate-3c3c3d.svg?logo=ethereum)](https://www.blockchain.com/explorer/addresses/eth/0xA1F7Ba62C5a3A8b93Fe6656936192432F328a366)
-[![LTC donate](https://img.shields.io/badge/LTC-donate-a6a9aa.svg?logo=litecoin)](https://live.blockcypher.com/ltc/address/MJCeBEZUsNgDhRhqbLFfPiDcf7CSrdvmZ3)
-[![USDC donate](https://img.shields.io/badge/USDC-donate-2775ca.svg?logo=cashapp)](https://etherscan.io/address/0xCf42D9F53F974CBd7c304eF0243CAe8e029885A8) -->
-
----
-
-## Description
-
-ASFTimedPlay is a plugin for ArchiSteamFarm that allows you to set your bots to play games for specific durations and optionally idle a game afterwards with settings that persist between restarts of ASF.
-
----
-
-## Commands
-
-`!playfor` - Play games for a specified duration
-`!idle` - Idle a game after playing for a specified duration
-
-### PlayFor Command
-
-`!playfor [Bots] <AppID1,AppID2,...> <Minutes1,Minutes2,...>`
-
-The PlayFor command lets you set up timed game sessions. You can specify multiple games and their durations, with an optional idle game at the end.
-
-#### PlayFor Command Examples
-
-- `!playfor ASF 400 60` - All bots play AppID 400 for 60 minutes
-- `!playfor ASF 400,620 60` - All bots play AppID 400 and 620 for 60 minutes each
-- `!playfor botname 400,620 60,10` - Bot "botname" plays AppID 400 for 60 minutes, then AppID 620 for 10 minutes
-- `!playfor ASF 400,620,500 60,30,*` - All bots play AppID 400 for 60 minutes, AppID 620 for 30 minutes, then idle AppID 500
-- `!playfor stop` - Stops all PlayFor sessions on the current bot (does not clear the idle game, if set)
-- `!playfor stopall` - Stops all PlayFor and Idle sessions on the current bot
-
-### Idle Command
-
-`!idle [Bots] <AppID>`
-
-The Idle command sets up a game to be idled during bot downtime (when not farming cards or performing other tasks).
-
-#### Idle Command Examples
-
-- `!idle ASF 400` - All bots will idle AppID 400 during downtime
-- `!idle botname 620` - Bot "botname" will idle AppID 620 during downtime
-- `!idle stop` - Stops idling on the current bot
-
----
+A plugin for ArchiSteamFarm that allows you to play games for a specific amount of time and then automatically switch to the next game or start idling.
 
 ## Features
 
-- Play multiple games for specified durations
-- Automatically switch between games based on configured times
-- Optional idle game after completing timed sessions
-- Persistent configuration that survives bot restarts
-- Automatic resumption of sessions after disconnections
-- Compatible with ASF's card farming and other features
+- **Timed Game Play**: Play games for a specified number of minutes
+- **Sequential Play**: Automatically switch to the next game when time is up
+- **Idle Support**: Automatically start idling a specified game after all timed games are complete
+- **Multi-Bot Support**: Control multiple bots with a single command
+- **Persistent State**: Games and timers persist across ASF restarts
+- **Status Monitoring**: Check the current status of games and timers
+
+## Commands
+
+### Basic Usage
+
+```
+!timedplay [Bots] <AppID1,AppID2,...> <Duration1,Duration2,...>
+```
+
+**Durations**: plain minutes (`MM`), `HH:MM`, `DD:HH:MM`, or unit form (`10h45m`, `1d 2h`). Use `*` as a duration to mark the rest as idle-after games (e.g. `30,*` = first game timed, then idle the others).
+
+### Examples
+
+```
+!timedplay 440 60                   # Play TF2 for 60 minutes on current bot
+!timedplay 440 8:30                 # Play TF2 for 8 hours 30 minutes (HH:MM)
+!timedplay 440 1:9:20               # Play TF2 for 1 day 9h 20m (DD:HH:MM)
+!timedplay 440 2h                   # Play TF2 for 2 hours (unit form)
+!timedplay 440,570 30,45           # Play TF2 30 min, Dota 2 for 45 min
+!timedplay 440,570 8:30,70         # TF2 for 8h30m, Dota 2 for 70 min
+!timedplay 440,570 30               # Play both games for 30 minutes each
+!timedplay Bot1 440 60              # Play TF2 for 60 minutes on Bot1
+!timedplay Bot1,Bot2 440 60         # Play TF2 for 60 minutes on both bots
+!timedplay 440,570 30,*            # Play TF2 for 30 min, then idle Dota 2
+!timedplay 440,570 2h,45,*         # 440 for 2h, 570 for 45 min, then idle both
+```
+
+### Idle command (`!idle`)
+
+```
+!idle [Bots] <AppID1,AppID2,...>
+```
+
+Start idling the given games (no time limit). Use when the bot is free or to queue idling when busy.
+
+```
+!idle 440,570                       # Idle TF2 and Dota 2 on current bot
+!idle Bot1 440,570                  # Idle on Bot1
+!idle stop                          # Stop idling and clear idle list
+```
+
+Alias: `!i` (same as `!idle`).
+
+### Control Commands
+
+```
+!timedplay stop                     # Stop playing timed games (keeps idle games)
+!timedplay stopall                  # Stop everything (including idling)
+!timedplay status                   # Check current status of games and timers
+!tp                                 # Short for !timedplay
+```
+
+## Technical Details
+
+### Timer Implementation
+
+- Uses `System.Threading.Timer` with 60-second intervals
+- Tracks timer start times to detect drift
+- Pauses timers when bot is disconnected or not playing the target game
+- Resumes timers when bot reconnects and starts playing
+
+### Idle behavior (`!idle`)
+
+- **Interruptible**: Idling does not block ASF or the account. Card farming, redeeming, or playing on another device will take over; the plugin does not force the idle games.
+- **Resume when free**: You can run `!idle` even when a bot is farming or redeeming; the idle list is saved and idling starts when the bot is free. A background check runs every 2 minutes to resume idling when the account is no longer in use elsewhere or by ASF.
+- **No interrupt when in use**: The plugin uses ASF’s `IsPlayingPossible` (account free). It never calls Play when the account is occupied (e.g. user on another system), so it does not interrupt. Once the account is free again, the next 2‑minute check will resume idling.
+- **!idle stop**: Stops idling and clears the idle list for that bot.
+
+### Configuration
+
+- Configuration is stored in `ASFTimedPlay.json`
+- Persists across ASF restarts
+- Automatically cleans up empty entries
+
+### Bot Integration
+
+- Integrates with ASF's card farming system
+- Respects ASF's game prioritization
+- Works alongside other ASF plugins
+
+## Installation
+
+1. Download the plugin files
+2. Place them in your ASF plugins directory
+3. Restart ASF
+4. Use the commands to start playing games
+
+## Troubleshooting
+
+### Games not running for the full time
+
+- Check if the bot is actually playing the game (use `!timedplay status`)
+- Verify the bot is connected and logged on
+- Check ASF logs for timer drift warnings
+
+### Timer appears paused
+
+- The timer pauses when the bot is disconnected or not playing the target game
+- It will automatically resume when the bot reconnects and starts playing
+- Use `!timedplay status` to check timer state
+
+### Stop command not working
+
+- Try `!timedplay stopall` to stop everything
+- Check ASF logs for any errors
+- Restart ASF if necessary
+
+## License
+
+This plugin is open source and available under the same license as ArchiSteamFarm.

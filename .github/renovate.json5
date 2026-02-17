@@ -1,16 +1,18 @@
 {
-	"$schema": "https://docs.renovatebot.com/renovate-schema.json",
-	"extends": [
-		"config:base",
+	$schema: "https://docs.renovatebot.com/renovate-schema.json",
+
+	extends: [
+		"config:best-practices",
 		":assignee(jaredcat)",
 		":automergeBranch",
 		":automergeDigest",
 		":automergeMinor",
 		":disableDependencyDashboard",
 		":disableRateLimiting",
-		":label(🤖 Automatic)"
+		":label(🤖 Automatic)",
 	],
+
 	"git-submodules": {
-		"enabled": true
-	}
+		enabled: true,
+	},
 }

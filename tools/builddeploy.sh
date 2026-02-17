@@ -16,7 +16,7 @@ SERVICE_HOST=${SERVICE_HOST:-$DEPLOY_HOST}
 if [ "$1" != "--restart-only" ]; then
 	# Build and copy the DLL
 	dotnet build ASFTimedPlay || exit 1
-	scp ASFTimedPlay/bin/Debug/net9.0/ASFTimedPlay.dll "${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_PATH}"
+	scp ASFTimedPlay/bin/Debug/net10.0/ASFTimedPlay.dll "${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_PATH}"
 fi
 
 # If --restart or --restart-only parameter is provided, restart the service

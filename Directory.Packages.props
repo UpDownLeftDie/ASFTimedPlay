@@ -1,3 +1,16 @@
+<?xml version="1.0" encoding="UTF-8" ?>
 <Project>
-	<Import Project="ArchiSteamFarm/Directory.Packages.props" />
+    <Import Project="ArchiSteamFarm/Directory.Packages.props" />
+    <ItemGroup>
+        <PackageVersion Include="JetBrains.Annotations"
+                        Version="2024.2.0" />
+        <PackageVersion Include="Microsoft.NET.Test.Sdk"
+                        Version="18.0.1" />
+        <PackageVersion Include="Moq"
+                        Version="4.20.72" />
+        <PackageVersion Include="xunit"
+                        Version="2.9.3" />
+        <PackageVersion Include="xunit.runner.visualstudio"
+                        Version="3.1.5" />
+    </ItemGroup>
 </Project>
