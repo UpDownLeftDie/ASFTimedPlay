@@ -10,6 +10,7 @@ namespace ASFTimedPlay.Commands;
 
 public static class TimedPlayCommand {
 	public static async Task<string?> Response(Bot bot, string[] args) {
+		ArgumentNullException.ThrowIfNull(bot);
 		try {
 			LogGenericDebug($"TimedPlay command started with args: {string.Join(" ", args)}");
 

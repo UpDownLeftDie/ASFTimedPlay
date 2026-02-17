@@ -127,10 +127,10 @@ internal static class CommandHelpers {
 			}
 
 						if (statusParts.Count > 0) {
-				return Task.FromResult(bot.Commands.FormatBotResponse(string.Join(" | ", statusParts)));
+				return Task.FromResult<string?>(bot.Commands.FormatBotResponse(string.Join(" | ", statusParts)));
 			}
 		}
 
-		return Task.FromResult(bot.Commands.FormatBotResponse("No active timed play or idle games"));
+		return Task.FromResult<string?>(bot.Commands.FormatBotResponse("No active timed play or idle games"));
 	}
 }

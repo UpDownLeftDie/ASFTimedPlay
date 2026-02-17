@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Reflection;
 using ArchiSteamFarm.Steam;
@@ -36,22 +37,22 @@ public class TimedPlayCommandTests {
 	}
 
 	[Fact]
-	public async Task Response_NoArgs_ReturnsUsage() {
+	public async Task ResponseNoArgsReturnsUsage() {
 		string[] args = ["timedplay"];
 		string? response = await TimedPlayCommand.Response(_mockBot.Object, args);
-		Assert.Contains("Usage: !timedplay", response);
-		Assert.Contains("<TestBot>", response);
+		Assert.Contains("Usage: !timedplay", response, StringComparison.Ordinal);
+		Assert.Contains("<TestBot>", response, StringComparison.Ordinal);
 	}
 
 	[Fact]
-	public async Task Response_Stop_WithNoActiveGames_ReturnsNoActiveGamesFound() {
+	public async Task ResponseStopWithNoActiveGamesReturnsNoActiveGamesFound() {
 		string[] args = ["timedplay", "stop"];
 		string? response = await TimedPlayCommand.Response(_mockBot.Object, args);
-		Assert.Contains("No active games found", response);
+		Assert.Contains("No active games found", response, StringComparison.Ordinal);
 	}
 
 	[Fact]
-	public async Task Response_Stop_WithActiveEntry_StopsTimedPlayGames() {
+	public async Task ResponseStopWithActiveEntryStopsTimedPlayGames() {
 		// Seed config via reflection so there is an active timed play entry to stop
 		Assembly asm = typeof(TimedPlayCommand).Assembly;
 		Type? entryType = asm.GetType("ASFTimedPlay.TimedPlayEntry");
@@ -81,19 +82,19 @@ public class TimedPlayCommandTests {
 		string? response = await TimedPlayCommand.Response(_mockBot.Object, args);
 
 		_mockBot.Verify(b => b.Actions.Play(It.Is<IReadOnlyCollection<uint>>(g => !g.Any())), Times.Once);
-		Assert.Contains("Stopped timed play", response);
+		Assert.Contains("Stopped timed play", response, StringComparison.Ordinal);
 	}
 
 	[Fact]
-	public async Task Response_SingleGameAndMinutes_StartsPlaying() {
+	public async Task ResponseSingleGameAndMinutesStartsPlaying() {
 		string[] args = ["timedplay", "440", "60"];
 		_ = _mockBot.Setup(b => b.Actions.Play(It.IsAny<IReadOnlyCollection<uint>>()))
 				.ReturnsAsync((true, "Started playing"));
 
 		string? response = await TimedPlayCommand.Response(_mockBot.Object, args);
 
-		Assert.Contains("Now playing: 440 for 60 minutes", response);
-		Assert.Contains(_mockBot.Object.BotName, response);
+		Assert.Contains("Now playing: 440 for 60 minutes", response, StringComparison.Ordinal);
+		Assert.Contains(_mockBot.Object.BotName, response, StringComparison.Ordinal);
 
 		// Verify game was added to config via reflection
 		Assembly asm = typeof(TimedPlayCommand).Assembly;
@@ -105,47 +106,47 @@ public class TimedPlayCommandTests {
 	}
 
 	[Fact]
-	public async Task Response_MultipleGamesOneMinute_StartsPlayingAll() {
+	public async Task ResponseMultipleGamesOneMinuteStartsPlayingAll() {
 		string[] args = ["timedplay", "440,570", "30"];
 		_ = _mockBot.Setup(b => b.Actions.Play(It.IsAny<IReadOnlyCollection<uint>>()))
 				.ReturnsAsync((true, "Started playing"));
 
 		string? response = await TimedPlayCommand.Response(_mockBot.Object, args);
 
-		Assert.Contains("Now playing: 440 for 30 minutes, 570 for 30 minutes", response);
+		Assert.Contains("Now playing: 440 for 30 minutes, 570 for 30 minutes", response, StringComparison.Ordinal);
 	}
 
 	[Fact]
-	public async Task Response_GameWithIdleMarker_SetsIdleGame() {
+	public async Task ResponseGameWithIdleMarkerSetsIdleGame() {
 		string[] args = ["timedplay", "440,570", "30,*"];
 		_ = _mockBot.Setup(b => b.Actions.Play(It.IsAny<IReadOnlyCollection<uint>>()))
 				.ReturnsAsync((true, "Started playing"));
 
 		string? response = await TimedPlayCommand.Response(_mockBot.Object, args);
 
-		Assert.Contains("Now playing: 440 for 30 minutes", response);
-		Assert.Contains("570 will be idled after completion", response);
+		Assert.Contains("Now playing: 440 for 30 minutes", response, StringComparison.Ordinal);
+		Assert.Contains("570 will be idled after completion", response, StringComparison.Ordinal);
 	}
 
 	[Fact]
-	public async Task Response_InvalidGameId_ReturnsError() {
+	public async Task ResponseInvalidGameIdReturnsError() {
 		string[] args = ["timedplay", "invalid", "30"];
 		string? response = await TimedPlayCommand.Response(_mockBot.Object, args);
-		Assert.Contains("Invalid game ID: invalid", response);
+		Assert.Contains("Invalid game ID: invalid", response, StringComparison.Ordinal);
 	}
 
 	[Fact]
-	public async Task Response_InvalidMinutes_ReturnsError() {
+	public async Task ResponseInvalidMinutesReturnsError() {
 		string[] args = ["timedplay", "440", "invalid"];
 		string? response = await TimedPlayCommand.Response(_mockBot.Object, args);
-		Assert.Contains("Invalid minutes value: invalid", response);
+		Assert.Contains("Invalid minutes value: invalid", response, StringComparison.Ordinal);
 	}
 
 	[Fact]
-	public async Task Response_MinutesCountMismatch_ReturnsError() {
+	public async Task ResponseMinutesCountMismatchReturnsError() {
 		// 2 games but 3 minute values -> mismatch
 		string[] args = ["timedplay", "440,570", "30,45,60"];
 		string? response = await TimedPlayCommand.Response(_mockBot.Object, args);
-		Assert.Contains("Number of minute values must match number of games", response);
+		Assert.Contains("Number of minute values must match number of games", response, StringComparison.Ordinal);
 	}
 }

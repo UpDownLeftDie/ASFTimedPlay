@@ -25,7 +25,7 @@ internal static class IdleCommand {
 
 		// Handle bot selection
 		HashSet<Bot>? bots;
-		if (parameters[0].Contains(',') || uint.TryParse(parameters[0], out _)) {
+		if (parameters[0].Contains(',', StringComparison.Ordinal) || uint.TryParse(parameters[0], out _)) {
 			// If first parameter contains commas or is a number, assume it's game IDs and use current bot
 			bots = [bot];
 		} else {
