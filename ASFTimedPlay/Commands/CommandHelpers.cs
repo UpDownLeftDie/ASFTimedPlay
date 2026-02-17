@@ -44,20 +44,13 @@ internal static class CommandHelpers {
 					LogGenericDebug($"Cleared timer for bot {bot.BotName}");
 				}
 
-				// Clear timer start time
-				if (Instance != null && Instance.TimerStartTimes.ContainsKey(bot)) {
-					_ = Instance.TimerStartTimes.Remove(bot);
-					LogGenericDebug($"Cleared timer start time for bot {bot.BotName}");
-				}
-
-				// Also clear any paused timer state and wall-clock tracking
+				// Clear per-game timer state and wall-clock tracking
 				if (Instance != null) {
-					if (Instance.TimerPausedAt.ContainsKey(bot)) {
-						_ = Instance.TimerPausedAt.Remove(bot);
-						LogGenericDebug($"Cleared paused timer state for bot {bot.BotName}");
-					}
+					_ = Instance.GameStartTimes.Remove(bot);
 					_ = Instance.GameDurationMinutes.Remove(bot);
+					_ = Instance.TimerPausedAt.Remove(bot);
 					_ = Instance.TotalPausedDuration.Remove(bot);
+					LogGenericDebug($"Cleared timer state for bot {bot.BotName}");
 				}
 			}
 
