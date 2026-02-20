@@ -249,6 +249,12 @@ internal sealed class ASFTimedPlay
 			return;
 		}
 
+		// If config no longer has this bot (e.g. finished or stop command), stop timer and clear state so we don't keep playing
+		if (Config?.TimedPlayGames?.ContainsKey(bot.BotName) != true && Instance.GameStartTimes.ContainsKey(bot)) {
+			await CleanupTimerAndState(bot).ConfigureAwait(false);
+			return;
+		}
+
 		if (!Instance.GameStartTimes.TryGetValue(bot, out Dictionary<uint, DateTime>? startTimes) ||
 		    !Instance.GameDurationMinutes.TryGetValue(bot, out Dictionary<uint, uint>? durations)) {
 			return;
@@ -266,8 +272,28 @@ internal sealed class ASFTimedPlay
 				Instance.TotalPausedDuration[bot] += DateTime.UtcNow - pausedAt;
 				Instance.TimerPausedAt[bot] = DateTime.UtcNow;
 			} else {
+				// First time pausing: we may have counted up to 1 minute while they were already on another machine. Add 1 min back to err on the side of caution.
 				Instance.TimerPausedAt[bot] = DateTime.UtcNow;
 				LogGenericDebug($"Timer paused for bot {bot.BotName} at {DateTime.UtcNow}");
+				await ConfigLock.WaitAsync().ConfigureAwait(false);
+				try {
+					if (Config?.TimedPlayGames.TryGetValue(bot.BotName, out TimedPlayEntry? currentEntry) == true) {
+						foreach (uint gameId in currentSet) {
+							if (currentEntry.GameMinutes.TryGetValue(gameId, out uint remaining)) {
+								currentEntry.GameMinutes[gameId] = remaining + 1;
+							}
+							// Keep in-memory duration in sync so wall-clock remaining is correct when we resume
+							if (Instance.GameDurationMinutes.TryGetValue(bot, out Dictionary<uint, uint>? durs) && durs.TryGetValue(gameId, out uint dur)) {
+								durs[gameId] = dur + 1;
+							}
+						}
+						currentEntry.LastUpdate = DateTime.UtcNow;
+						await SaveConfig(lockAlreadyHeld: true).ConfigureAwait(false);
+						LogGenericDebug($"Added 1 minute to remaining for {bot.BotName} (pause compensation)");
+					}
+				} finally {
+					_ = ConfigLock.Release();
+				}
 			}
 			(bool resumeSuccess, string resumeMsg) = await bot.Actions.Play(currentSet).ConfigureAwait(false);
 			if (resumeSuccess) {
@@ -316,6 +342,8 @@ internal sealed class ASFTimedPlay
 		await ConfigLock.WaitAsync().ConfigureAwait(false);
 		try {
 			if (Instance == null || Config?.TimedPlayGames.TryGetValue(bot.BotName, out TimedPlayEntry? currentEntry) != true || currentEntry == null) {
+				// Config was cleared (e.g. by HandleGameCompletion or stop) — ensure timer and state are cleaned up
+				await CleanupTimerAndState(bot).ConfigureAwait(false);
 				return;
 			}
 
@@ -353,14 +381,21 @@ internal sealed class ASFTimedPlay
 				(bool success, string message) = await bot.Actions.Play(newSet).ConfigureAwait(false);
 				LogGenericDebug($"After completion, now playing {string.Join(",", newSet)}: {success}. {message}");
 			} else {
-				if (instance.ActiveTimers.TryGetValue(bot, out Timer? oldTimer)) {
-					await oldTimer.DisposeAsync().ConfigureAwait(false);
-					_ = instance.ActiveTimers.Remove(bot);
+				// Always dispose timer and clear state first so we never leave an active timer with no config
+				try {
+					if (instance.ActiveTimers.TryGetValue(bot, out Timer? oldTimer)) {
+						await oldTimer.DisposeAsync().ConfigureAwait(false);
+						_ = instance.ActiveTimers.Remove(bot);
+					}
+					_ = instance.GameStartTimes.Remove(bot);
+					_ = instance.GameDurationMinutes.Remove(bot);
+					(bool success, string message) = await bot.Actions.Play([]).ConfigureAwait(false);
+					LogGenericDebug($"Stopped games: {success}. {message}");
+				} finally {
+					// Ensure state is cleared even if Play throws
+					_ = instance.TotalPausedDuration.Remove(bot);
+					_ = instance.TimerPausedAt.Remove(bot);
 				}
-				(bool success, string message) = await bot.Actions.Play([]).ConfigureAwait(false);
-				LogGenericDebug($"Stopped games: {success}. {message}");
-				_ = instance.GameStartTimes.Remove(bot);
-				_ = instance.GameDurationMinutes.Remove(bot);
 
 				// Sequential mode: if more games remain, schedule the next one
 				if (currentEntry.SequentialMode && currentEntry.GameMinutes.Count > 0) {
@@ -383,6 +418,26 @@ internal sealed class ASFTimedPlay
 		} finally {
 			_ = ConfigLock.Release();
 		}
+	}
+
+	private static async Task CleanupTimerAndState(Bot bot) {
+		if (Instance == null) {
+			return;
+		}
+		ASFTimedPlay instance = Instance;
+		if (instance.ActiveTimers.TryGetValue(bot, out Timer? timer)) {
+			await timer.DisposeAsync().ConfigureAwait(false);
+			_ = instance.ActiveTimers.Remove(bot);
+			LogGenericDebug($"Cleaned up timer for {bot.BotName} (no config entry or early return)");
+		}
+		_ = instance.GameStartTimes.Remove(bot);
+		_ = instance.GameDurationMinutes.Remove(bot);
+		_ = instance.TotalPausedDuration.Remove(bot);
+		_ = instance.TimerPausedAt.Remove(bot);
+		(bool stopSuccess, string stopMsg) = await bot.Actions.Play([]).ConfigureAwait(false);
+		LogGenericDebug($"Stopped playing for {bot.BotName}: {stopSuccess}. {stopMsg}");
+		(bool resumeSuccess, string resumeMsg) = bot.Actions.Resume();
+		LogGenericInfo($"Timed play cleanup for {bot.BotName}: {resumeMsg}");
 	}
 
 	internal static void ApplyWallClockCorrectionToEntry(TimedPlayEntry entry) {

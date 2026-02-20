@@ -95,21 +95,29 @@ internal static class CommandHelpers {
 
 			// Check if there are active timed play games
 			if (entry.GameMinutes.Count > 0) {
-				// Use wall-clock correction for display so remaining is accurate across restarts / between timer ticks
-				double elapsedSinceUpdate = (DateTime.UtcNow - entry.LastUpdate).TotalMinutes;
-				string gamesStatus = string.Join(", ", entry.GameMinutes.Select(kvp => {
-					uint effectiveRemaining = (uint)Math.Max(0, (int)kvp.Value - (int)Math.Floor(elapsedSinceUpdate));
-					return $"{kvp.Key} ({effectiveRemaining} minutes remaining)";
-				}));
+				// Same check as timer callback: is the bot actually playing these games right now? (e.g. not playing on another machine)
+				bool actuallyPlayingRightNow = bot.IsConnectedAndLoggedOn &&
+					entry.GameMinutes.Keys.All(g => bot.CardsFarmer.CurrentGamesFarmingReadOnly.Any(c => c.AppID == g));
+				bool hasTimer = Instance?.ActiveTimers.ContainsKey(bot) == true;
+				bool inPausedState = Instance?.TimerPausedAt.ContainsKey(bot) == true || (hasTimer && !actuallyPlayingRightNow);
+
+				// When paused, show raw remaining (time does not count). When playing, apply wall-clock correction.
+				string gamesStatus;
+				if (inPausedState) {
+					gamesStatus = string.Join(", ", entry.GameMinutes.Select(kvp => $"{kvp.Key} ({kvp.Value} min remaining, paused)"));
+				} else {
+					double elapsedSinceUpdate = (DateTime.UtcNow - entry.LastUpdate).TotalMinutes;
+					gamesStatus = string.Join(", ", entry.GameMinutes.Select(kvp => {
+						uint effectiveRemaining = (uint)Math.Max(0, (int)kvp.Value - (int)Math.Floor(elapsedSinceUpdate));
+						return $"{kvp.Key} ({effectiveRemaining} minutes remaining)";
+					}));
+				}
 				statusParts.Add($"Playing: {gamesStatus}");
 
-				// Check if timer is active
-				bool hasTimer = Instance?.ActiveTimers.ContainsKey(bot) == true;
-				bool isPaused = Instance?.TimerPausedAt.ContainsKey(bot) == true;
-
+				// Timer: ACTIVE = counting down because bot is playing. PAUSED = not playing (e.g. playing on another machine) so time does not count.
 				if (hasTimer) {
-					if (isPaused) {
-						statusParts.Add("Timer: PAUSED");
+					if (inPausedState) {
+						statusParts.Add("Timer: PAUSED (time not counting)");
 					} else {
 						statusParts.Add("Timer: ACTIVE");
 					}

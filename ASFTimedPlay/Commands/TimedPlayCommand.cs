@@ -29,23 +29,42 @@ public static class TimedPlayCommand {
 				);
 			}
 
-			// Handle stop command
+			// Subcommands: "timedplay status" / "timedplay status ASF" / "timedplay stop botname" etc.
 			if (parameters[0].Equals("stop", StringComparison.OrdinalIgnoreCase)) {
-				return await CommandHelpers.HandleStopCommand(bot, stopIdleGame: false, stopTimedPlayGames: true).ConfigureAwait(false);
+				HashSet<Bot>? stopBots = parameters.Length >= 2 ? Bot.GetBots(parameters[1]) : [bot];
+				if (stopBots == null || stopBots.Count == 0) {
+					return bot.Commands.FormatBotResponse("No valid bots found!");
+				}
+				var results = new List<string?>();
+				foreach (Bot b in stopBots) {
+					results.Add(await CommandHelpers.HandleStopCommand(b, stopIdleGame: false, stopTimedPlayGames: true).ConfigureAwait(false));
+				}
+				return string.Join(Environment.NewLine, results.Where(r => !string.IsNullOrEmpty(r)));
 			}
-
-			// Handle stopall command
 			if (parameters[0].Equals("stopall", StringComparison.OrdinalIgnoreCase)) {
-				return await CommandHelpers.HandleStopCommand(bot, stopIdleGame: true, stopTimedPlayGames: true).ConfigureAwait(false);
+				HashSet<Bot>? stopBots = parameters.Length >= 2 ? Bot.GetBots(parameters[1]) : [bot];
+				if (stopBots == null || stopBots.Count == 0) {
+					return bot.Commands.FormatBotResponse("No valid bots found!");
+				}
+				var results = new List<string?>();
+				foreach (Bot b in stopBots) {
+					results.Add(await CommandHelpers.HandleStopCommand(b, stopIdleGame: true, stopTimedPlayGames: true).ConfigureAwait(false));
+				}
+				return string.Join(Environment.NewLine, results.Where(r => !string.IsNullOrEmpty(r)));
 			}
-
-			// Handle status command
 			if (parameters[0].Equals("status", StringComparison.OrdinalIgnoreCase)) {
-				return await CommandHelpers.HandleStatusCommand(bot).ConfigureAwait(false);
+				HashSet<Bot>? statusBots = parameters.Length >= 2 ? Bot.GetBots(parameters[1]) : [bot];
+				if (statusBots == null || statusBots.Count == 0) {
+					return bot.Commands.FormatBotResponse("No valid bots found!");
+				}
+				var results = new List<string?>();
+				foreach (Bot b in statusBots) {
+					results.Add(await CommandHelpers.HandleStatusCommand(b).ConfigureAwait(false));
+				}
+				return string.Join(Environment.NewLine, results.Where(r => !string.IsNullOrEmpty(r)));
 			}
-
-			// Handle debug command
 			if (parameters[0].Equals("debug", StringComparison.OrdinalIgnoreCase)) {
+				// Debug shows global plugin state; optional bot name is ignored (debug is same for all)
 				return await CommandHelpers.HandleDebugCommand(bot).ConfigureAwait(false);
 			}
 
