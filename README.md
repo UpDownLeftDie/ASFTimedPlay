@@ -124,9 +124,9 @@ Run **`!timedplay debug`** and share the output when asking for help or reportin
 
 ### Timer appears paused
 
-- The timer pauses when the bot is disconnected or not playing the target game
-- It will automatically resume when the bot reconnects and starts playing
-- Use `!timedplay status` to check timer state
+- The timer pauses when the bot is disconnected or when ASF reports the bot is farming *different* games than the timed set.
+- If the bot is connected and we don't see other games being farmed, the timer stays **ACTIVE**. In ASF, `CurrentGamesFarmingReadOnly` is only set inside `CardsFarmer.FarmMultiple()`/`FarmCards()` (automatic farming); `Actions.Play()` only calls `ArchiHandler.PlayGames()` and does not populate that list, so the plugin does not rely on it.
+- Use `!timedplay status` to check timer state.
 
 ### Stop command not working
 
