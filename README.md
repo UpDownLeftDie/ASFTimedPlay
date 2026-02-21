@@ -19,6 +19,7 @@ A plugin for ArchiSteamFarm that allows you to play games for a specific amount 
 !timedplay [Bots] <AppID1,AppID2,...> <Duration1,Duration2,...> [sequential|seq]
 ```
 
+- **Bots**: Omit for current bot; use a bot name, comma-separated names, or **ASF** to target all bots (same as built-in ASF commands).
 - **Durations**: plain minutes (`MM`), `HH:MM`, `DD:HH:MM`, or unit form (`10h45m`, `1d 2h`). Use `*` as a duration to mark the rest as idle-after games (e.g. `30,*` = first game timed, then idle the others).
 - **Sequential mode**: Add `sequential` or `seq` at the end to play one game at a time instead of all at once. Useful if you prefer the older behavior or need to avoid concurrent play.
 
@@ -34,6 +35,7 @@ A plugin for ArchiSteamFarm that allows you to play games for a specific amount 
 !timedplay 440,570 30               # Play both games for 30 minutes each
 !timedplay Bot1 440 60              # Play TF2 for 60 minutes on Bot1
 !timedplay Bot1,Bot2 440 60         # Play TF2 for 60 minutes on both bots
+!timedplay ASF 440 60               # Play TF2 for 60 minutes on all bots
 !timedplay 440,570 30,*             # Play TF2 for 30 min, then idle Dota 2
 !timedplay 440,570 2h,45,*          # 440 for 2h, 570 for 45 min, then idle both
 !timedplay 440,570 30,45 sequential   # Play TF2 for 30 min, then Dota 2 for 45 min (one at a time)
@@ -46,12 +48,14 @@ A plugin for ArchiSteamFarm that allows you to play games for a specific amount 
 !idle [Bots] <AppID1,AppID2,...>
 ```
 
-Start idling the given games (no time limit). Use when the bot is free or to queue idling when busy.
+Start idling the given games (no time limit). Use when the bot is free or to queue idling when busy. **Bots**: omit for current bot; use a bot name, comma-separated names, or **ASF** for all bots.
 
 ```
 !idle 440,570                       # Idle TF2 and Dota 2 on current bot
 !idle Bot1 440,570                  # Idle on Bot1
-!idle stop                          # Stop idling and clear idle list
+!idle ASF 440,570                   # Idle on all bots
+!idle stop                          # Stop idling on current bot
+!idle stop ASF                      # Stop idling on all bots
 ```
 
 Alias: `!i` (same as `!idle`).
@@ -59,9 +63,8 @@ Alias: `!i` (same as `!idle`).
 ### Control Commands
 
 ```
-!timedplay stop                     # Stop playing timed games (keeps idle games)
-!timedplay stopall                  # Stop everything (including idling)
-!timedplay status                   # Check current status of games and timers
+!timedplay stop [Bots]              # Stop timed games (Bots optional; use ASF for all)
+!timedplay status [Bots]            # Check status (Bots optional; use ASF for all)
 !timedplay debug                    # Output version, config path, and config JSON (for bug reports)
 !tp                                 # Short for !timedplay
 ```
@@ -127,7 +130,7 @@ Run **`!timedplay debug`** and share the output when asking for help or reportin
 
 ### Stop command not working
 
-- Try `!timedplay stopall` to stop everything
+- Try `!timedplay stop ASF` to stop everything
 - Check ASF logs for any errors
 - Restart ASF if necessary
 

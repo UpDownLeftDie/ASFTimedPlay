@@ -13,14 +13,23 @@ internal static class IdleCommand {
 		if (parameters.Length == 0) {
 			return await Task.FromResult<string?>(bot.Commands.FormatBotResponse(
 				"Usage: !idle [Bots] <AppID1,AppID2,...>\n" +
-				"Use: \"!idle stop\" to stop idling\n" +
+				"[Bots]: bot name, comma-separated names, or ASF for all bots\n" +
+				"Use: \"!idle stop\" or \"!idle stop [Bots]\" to stop idling\n" +
 				"Aliases: !i (same as !idle)"
 			)).ConfigureAwait(false);
 		}
 
 		// Handle stop command
 		if (parameters[0].Equals("stop", StringComparison.OrdinalIgnoreCase)) {
-			return await CommandHelpers.HandleStopCommand(bot, stopIdleGame: true, stopTimedPlayGames: false).ConfigureAwait(false);
+			HashSet<Bot>? stopBots = parameters.Length >= 2 ? Bot.GetBots(parameters[1]) : [bot];
+			if (stopBots == null || stopBots.Count == 0) {
+				return await Task.FromResult<string?>(bot.Commands.FormatBotResponse("No valid bots found!")).ConfigureAwait(false);
+			}
+			var results = new List<string?>();
+			foreach (Bot b in stopBots) {
+				results.Add(await CommandHelpers.HandleStopCommand(b, stopIdleGame: true, stopTimedPlayGames: false).ConfigureAwait(false));
+			}
+			return string.Join(Environment.NewLine, results.Where(r => !string.IsNullOrEmpty(r)));
 		}
 
 		// Handle bot selection
