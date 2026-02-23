@@ -266,22 +266,24 @@ internal sealed class ASFTimedPlay
 		double pausedMinutes = Instance.TotalPausedDuration.TryGetValue(bot, out TimeSpan paused) ? paused.TotalMinutes : 0;
 
 		// Decide if we consider this bot "playing our set" (timer counts) vs paused. Each bot is independent.
-		// CurrentGamesFarmingReadOnly is NOT populated by our Play() calls. In ASF source: Actions.Play() only
-		// calls ArchiHandler.PlayGames() and does not touch CardsFarmer.CurrentGamesFarming; CurrentGamesFarming
-		// is only set inside CardsFarmer.FarmMultiple()/FarmCards() during automatic farming. So: if the list is
-		// empty we treat as ACTIVE (we asked them to play). Only pause when we have evidence they're not playing
-		// our set: disconnected, or the list is non-empty and contains different games.
+		// Per ASF: when an account is in use elsewhere, ASF shows it as offline (IsConnectedAndLoggedOn = false).
+		// We must never unpause or count down when the bot is offline or when playing is not possible (ASF status
+		// "Playing not available" / IsPlayingPossible = false). See Commands.ResponseStatus and ASF wiki.
+		// CurrentGamesFarmingReadOnly is NOT populated by our Play() calls (only by ASF automatic farming),
+		// so our games will not appear there when we started via Play(). We treat empty list as "playing our set"
+		// only when the bot is connected and playing is possible.
 		bool isConnected = bot.IsConnectedAndLoggedOn;
+		bool isPlayingPossible = bot.IsPlayingPossible;
 		var currentFarming = bot.CardsFarmer.CurrentGamesFarmingReadOnly;
 		bool allOurGamesInFarming = currentSet.All(g => currentFarming.Any(c => c.AppID == g));
 		bool farmingDifferentGames = currentFarming.Count > 0 && !allOurGamesInFarming;
-		bool isPlayingOurSet = isConnected && (currentFarming.Count == 0 || allOurGamesInFarming);
+		bool isPlayingOurSet = isConnected && isPlayingPossible && (currentFarming.Count == 0 || allOurGamesInFarming);
 
 		if (!isPlayingOurSet) {
 			string currentFarmingIds = string.Join(",", currentFarming.Select(c => c.AppID));
 			string expectedIds = string.Join(",", currentSet);
 			LogGenericDebug(
-				$"TimerCallback {bot.BotName}: isPlayingOurSet=false. IsConnectedAndLoggedOn={isConnected}, farmingDifferentGames={farmingDifferentGames}, expected games=[{expectedIds}], CurrentGamesFarmingReadOnly=[{currentFarmingIds}]");
+				$"TimerCallback {bot.BotName}: isPlayingOurSet=false. IsConnectedAndLoggedOn={isConnected}, IsPlayingPossible={isPlayingPossible}, farmingDifferentGames={farmingDifferentGames}, expected games=[{expectedIds}], CurrentGamesFarmingReadOnly=[{currentFarmingIds}]");
 			if (Instance.TimerPausedAt.TryGetValue(bot, out DateTime pausedAt)) {
 				Instance.TotalPausedDuration[bot] += DateTime.UtcNow - pausedAt;
 				Instance.TimerPausedAt[bot] = DateTime.UtcNow;

@@ -125,7 +125,7 @@ Run **`!timedplay debug`** and share the output when asking for help or reportin
 ### Timer appears paused
 
 - The timer pauses when the bot is disconnected or when ASF reports the bot is farming *different* games than the timed set.
-- If the bot is connected and we don't see other games being farmed, the timer stays **ACTIVE**. In ASF, `CurrentGamesFarmingReadOnly` is only set inside `CardsFarmer.FarmMultiple()`/`FarmCards()` (automatic farming); `Actions.Play()` only calls `ArchiHandler.PlayGames()` and does not populate that list, so the plugin does not rely on it.
+- The timer only counts down when the bot is **connected** and **not** "Playing not available" (ASF's `IsConnectedAndLoggedOn` and `!PlayingBlocked`). When an account is in use elsewhere, ASF shows it as offline, so the timer stays paused. See ASF's `Commands.ResponseStatus` and [Plugins development](https://github.com/JustArchiNET/ArchiSteamFarm/wiki/Plugins-development) for API usage.
 - Use `!timedplay status` to check timer state.
 
 ### Stop command not working

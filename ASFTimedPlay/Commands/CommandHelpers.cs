@@ -95,11 +95,11 @@ internal static class CommandHelpers {
 
 			// Check if there are active timed play games
 			if (entry.GameMinutes.Count > 0) {
-				// Same as timer: CurrentGamesFarmingReadOnly is only set by ASF's automatic farming loop, not by Play().
-				// ACTIVE when connected and (list empty or contains our games). PAUSED when disconnected or list has other games.
+				// Same as timer: never ACTIVE when offline or when playing not possible (ASF shows offline when in use elsewhere).
+				// CurrentGamesFarmingReadOnly is only set by ASF automatic farming, not by our Play().
 				var currentFarming = bot.CardsFarmer.CurrentGamesFarmingReadOnly;
 				bool allOurGamesInFarming = entry.GameMinutes.Keys.All(g => currentFarming.Any(c => c.AppID == g));
-				bool actuallyPlayingRightNow = bot.IsConnectedAndLoggedOn && (currentFarming.Count == 0 || allOurGamesInFarming);
+				bool actuallyPlayingRightNow = bot.IsConnectedAndLoggedOn && bot.IsPlayingPossible && (currentFarming.Count == 0 || allOurGamesInFarming);
 				bool hasTimer = Instance?.ActiveTimers.ContainsKey(bot) == true;
 				bool inPausedState = Instance?.TimerPausedAt.ContainsKey(bot) == true || (hasTimer && !actuallyPlayingRightNow);
 
