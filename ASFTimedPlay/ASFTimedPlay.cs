@@ -287,6 +287,10 @@ internal sealed class ASFTimedPlay
 			if (Instance.TimerPausedAt.TryGetValue(bot, out DateTime pausedAt)) {
 				Instance.TotalPausedDuration[bot] += DateTime.UtcNow - pausedAt;
 				Instance.TimerPausedAt[bot] = DateTime.UtcNow;
+				// Do NOT call Play() here. We already called it on first pause detection below.
+				// Calling Play() every tick while paused causes repeated Steam session restarts and
+				// can make IsPlayingPossible flicker on the next tick, re-triggering the "first time"
+				// branch and adding spurious +1 min compensation each cycle.
 			} else {
 				// First time pausing: we may have counted up to 1 minute while they were already on another machine. Add 1 min back to err on the side of caution.
 				Instance.TimerPausedAt[bot] = DateTime.UtcNow;
@@ -310,11 +314,12 @@ internal sealed class ASFTimedPlay
 				} finally {
 					_ = ConfigLock.Release();
 				}
+				// Only attempt to resume on first pause detection. Do not clear TimerPausedAt here —
+				// Play() can return success before the bot actually switches games; clearing it would
+				// cause the next tick to re-enter "first time pausing" and add another +1 min.
+				// We only clear TimerPausedAt when we actually observe the bot playing (see below).
+				_ = await bot.Actions.Play(currentSet).ConfigureAwait(false);
 			}
-			_ = await bot.Actions.Play(currentSet).ConfigureAwait(false);
-			// Do not clear TimerPausedAt here. Play() can return success before the bot actually switches games;
-			// if we clear it, the next tick would see !isPlayingOurSet again and re-enter "first time pausing", adding 1 min again.
-			// We only clear TimerPausedAt when we actually observe the bot playing (see below).
 			return;
 		}
 
@@ -431,7 +436,8 @@ internal sealed class ASFTimedPlay
 					}
 					module.SetIdleGames(currentEntry.IdleGameIds);
 					LogGenericInfo($"No more games to play, starting to idle {string.Join(",", currentEntry.IdleGameIds)}");
-				} else if (Config.TimedPlayGames.ContainsKey(bot.BotName)) {
+				} else {
+					// Resume normal ASF operation now that games are stopped
 					(bool resumeSuccess, string resumeMsg) = bot.Actions.Resume();
 					LogGenericInfo($"Timed play finished for {bot.BotName}: {resumeMsg}");
 				}
@@ -525,9 +531,6 @@ internal sealed class ASFTimedPlay
 								$"No remaining games and no idle games, removing from TimedPlayGames"
 							);
 							_ = Config.TimedPlayGames.Remove(bot.BotName);
-							// Return to normal ASF operation
-							(bool success, string message) = bot.Actions.Resume();
-							LogGenericInfo($"Timed play finished for {bot.BotName}: {message}");
 						}
 					}
 
