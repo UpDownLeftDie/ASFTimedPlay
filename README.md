@@ -104,10 +104,14 @@ Alias: `!i` (same as `!idle`).
 
 ## Installation
 
-1. Download the plugin files
-2. Place them in your ASF plugins directory
+1. Download the zip that matches your ASF major version from [Releases](https://github.com/UpDownLeftDie/ASFTimedPlay/releases):
+   - `ASFTimedPlay-V6.zip` for ArchiSteamFarm **6.x**
+   - `ASFTimedPlay-V7.zip` for ArchiSteamFarm **7.x**
+2. Extract into your ASF `plugins` directory
 3. Restart ASF
 4. Use the commands to start playing games
+
+While ASF 6 and 7 both exist, each GitHub release should include **both** zips. ASF auto-update picks the asset for its own major version.
 
 ## Troubleshooting
 

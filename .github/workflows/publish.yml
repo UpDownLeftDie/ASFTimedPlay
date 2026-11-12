@@ -1,12 +1,23 @@
 name: Plugin-publish
 
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      attach_to_release:
+        description: "Existing GitHub release tag to upload this build into (e.g. 4.0.0.0). Leave empty when not attaching."
+        required: false
+        default: ""
+        type: string
 
 env:
   CONFIGURATION: Release
   DOTNET_CLI_TELEMETRY_OPTOUT: true
   DOTNET_NOLOGO: true
   DOTNET_SDK_VERSION: 10.0
+  # ASF major line this branch targets (asset name ASFTimedPlay-V6.zip)
+  ASF_MAJOR: "6"
   GPG_PRIVATE_KEY: ${{ secrets.ARCHIBOT_GPG_PRIVATE_KEY }} # Optional, if secret not provided, will skip signing SHA512SUMS with GPG key. You can specify your own credentials if you'd like to, simply change ARCHIBOT_GPG_PRIVATE_KEY here to the one you want to use
 
 permissions:
@@ -69,6 +80,9 @@ jobs:
                   ;;
           esac
 
+          # Versioned asset so ASF can pick V6 vs V7 from the same GitHub release
+          PLUGIN_ZIP_NAME="${PLUGIN_NAME}-V${ASF_MAJOR}.zip"
+
           # Create the final zip file
           case "$(uname -s)" in
               "Darwin")
@@ -76,19 +90,19 @@ jobs:
                   if command -v zip >/dev/null; then
                       (
                           cd "${GITHUB_WORKSPACE}/out/plugin/${PLUGIN_NAME}"
-                          zip -q -r $zip_args "../../${PLUGIN_NAME}.zip" .
+                          zip -q -r $zip_args "../../${PLUGIN_ZIP_NAME}" .
                       )
                   else
-                      7z a -bd -slp -tzip -mm=Deflate $seven_zip_args "out/${PLUGIN_NAME}.zip" "${GITHUB_WORKSPACE}/out/plugin/${PLUGIN_NAME}/*"
+                      7z a -bd -slp -tzip -mm=Deflate $seven_zip_args "out/${PLUGIN_ZIP_NAME}" "${GITHUB_WORKSPACE}/out/plugin/${PLUGIN_NAME}/*"
                   fi
                   ;;
               *)
                   if command -v 7z >/dev/null; then
-                      7z a -bd -slp -tzip -mm=Deflate $seven_zip_args "out/${PLUGIN_NAME}.zip" "${GITHUB_WORKSPACE}/out/plugin/${PLUGIN_NAME}/*"
+                      7z a -bd -slp -tzip -mm=Deflate $seven_zip_args "out/${PLUGIN_ZIP_NAME}" "${GITHUB_WORKSPACE}/out/plugin/${PLUGIN_NAME}/*"
                   else
                       (
                           cd "${GITHUB_WORKSPACE}/out/plugin/${PLUGIN_NAME}"
-                          zip -q -r $zip_args "../../${PLUGIN_NAME}.zip" .
+                          zip -q -r $zip_args "../../${PLUGIN_ZIP_NAME}" .
                       )
                   fi
                   ;;
@@ -121,8 +135,11 @@ jobs:
               $compressionArgs = '-mx=9', '-mfb=258', '-mpass=15'
           }
 
+          # Versioned asset so ASF can pick V6 vs V7 from the same GitHub release
+          $pluginZipName = "$env:PLUGIN_NAME-V$env:ASF_MAJOR.zip"
+
           # Create the final zip file
-          7z a -bd -slp -tzip -mm=Deflate $compressionArgs "out\$env:PLUGIN_NAME.zip" "$env:GITHUB_WORKSPACE\out\plugin\$env:PLUGIN_NAME\*"
+          7z a -bd -slp -tzip -mm=Deflate $compressionArgs "out\$pluginZipName" "$env:GITHUB_WORKSPACE\out\plugin\$env:PLUGIN_NAME\*"
 
           if ($LastExitCode -ne 0) {
               throw "Last command failed."
@@ -134,10 +151,10 @@ jobs:
           compression-level: 1
           if-no-files-found: error
           name: ${{ matrix.os }}_${{ steps.plugin-name.outputs.info }}
-          path: out/${{ steps.plugin-name.outputs.info }}.zip
+          path: out/${{ steps.plugin-name.outputs.info }}-V${{ env.ASF_MAJOR }}.zip
 
   release:
-    if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') }}
+    if: ${{ (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')) || (github.event_name == 'workflow_dispatch' && inputs.attach_to_release != '') }}
     needs: publish
     runs-on: ubuntu-latest
 
@@ -194,7 +211,8 @@ jobs:
           name: SHA512SUMS.sign
           path: out/SHA512SUMS.sign
 
-      - name: Create GitHub release
+      - name: Create or update GitHub release (tag push)
+        if: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') }}
         uses: ncipollo/release-action@b7eabc95ff50cbeeedec83973935c8f306dfcd0b # v1.20.0
         with:
           allowUpdates: true
@@ -207,3 +225,17 @@ jobs:
           prerelease: true
           token: ${{ secrets.GITHUB_TOKEN }}
           updateOnlyUnreleased: true
+          replacesArtifacts: false
+
+      - name: Attach build to existing release
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.attach_to_release != '' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.attach_to_release }}
+          PLUGIN_NAME: ${{ needs.publish.outputs.PLUGIN_NAME }}
+          ASF_MAJOR: ${{ env.ASF_MAJOR }}
+        shell: sh
+        run: |
+          set -eu
+          # Upload only this branch's versioned zip so we do not clobber the other line's SHA512SUMS/zip
+          gh release upload "$RELEASE_TAG" "out/${PLUGIN_NAME}-V${ASF_MAJOR}.zip" --clobber
