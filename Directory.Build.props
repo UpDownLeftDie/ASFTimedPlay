@@ -3,7 +3,7 @@
     <Import Project="ArchiSteamFarm/Directory.Build.props" />
     <PropertyGroup>
         <PluginName>ASFTimedPlay</PluginName>
-        <Version>3.1.0.0</Version>
+        <Version>3.1.2.0</Version>
     </PropertyGroup>
     <PropertyGroup>
         <ApplicationIcon />

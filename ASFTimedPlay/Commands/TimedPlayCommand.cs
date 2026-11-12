@@ -18,14 +18,15 @@ public static class TimedPlayCommand {
 			if (parameters.Length == 0) {
 				return bot.Commands.FormatBotResponse(
 					"Usage: !timedplay [Bots] <AppID1,AppID2,...> <Duration1,Duration2,...>\n" +
+					"[Bots]: bot name, comma-separated names, or ASF for all bots\n" +
 					"Durations: MM (minutes), HH:MM, DD:HH:MM, or 10h45m / 1d 2h\n" +
 					"Examples:\n" +
 					"  !timedplay 440 2000 → 440 for 2000 min (or use 33:20 or 1:9:20)\n" +
 					"  !timedplay 440,100 8:30,70 → 440 for 8h30m, 100 for 70 min\n" +
 					"  !timedplay 440,570 2h,45,* → Play 440/570 for time, then idle both\n" +
-					"Use: \"!timedplay stop\" / \"!timedplay stopall\" / \"!timedplay status\" / \"!timedplay debug\"\n" +
+					"Use: \"!timedplay stop [Bots]\" / \"!timedplay status [Bots]\" / \"!timedplay debug\"\n" +
 					"Add \"sequential\" or \"seq\" at the end to play one game at a time. Max 32 games.\n" +
-					"Aliases: !tp, !pf"
+					"Aliases: !tp"
 				);
 			}
 
@@ -38,17 +39,6 @@ public static class TimedPlayCommand {
 				var results = new List<string?>();
 				foreach (Bot b in stopBots) {
 					results.Add(await CommandHelpers.HandleStopCommand(b, stopIdleGame: false, stopTimedPlayGames: true).ConfigureAwait(false));
-				}
-				return string.Join(Environment.NewLine, results.Where(r => !string.IsNullOrEmpty(r)));
-			}
-			if (parameters[0].Equals("stopall", StringComparison.OrdinalIgnoreCase)) {
-				HashSet<Bot>? stopBots = parameters.Length >= 2 ? Bot.GetBots(parameters[1]) : [bot];
-				if (stopBots == null || stopBots.Count == 0) {
-					return bot.Commands.FormatBotResponse("No valid bots found!");
-				}
-				var results = new List<string?>();
-				foreach (Bot b in stopBots) {
-					results.Add(await CommandHelpers.HandleStopCommand(b, stopIdleGame: true, stopTimedPlayGames: true).ConfigureAwait(false));
 				}
 				return string.Join(Environment.NewLine, results.Where(r => !string.IsNullOrEmpty(r)));
 			}
@@ -101,14 +91,9 @@ public static class TimedPlayCommand {
 					}
 					return string.Join(Environment.NewLine, results.Where(r => !string.IsNullOrEmpty(r)));
 				}
-				if (parameters[0].Equals("stopall", StringComparison.OrdinalIgnoreCase)) {
-					var results = new List<string?>();
-					foreach (Bot b in bots) {
-						results.Add(await CommandHelpers.HandleStopCommand(b, stopIdleGame: true, stopTimedPlayGames: true).ConfigureAwait(false));
-					}
-					return string.Join(Environment.NewLine, results.Where(r => !string.IsNullOrEmpty(r)));
-				}
 			}
+
+			LogGenericDebug($"TimedPlay: Command received by bot {bot.BotName}, target bots ({bots.Count}): [{string.Join(", ", bots.Select(b => b.BotName))}]");
 
 			LogGenericDebug($"Processing parameters: {string.Join(" ", parameters)}");
 
@@ -199,7 +184,16 @@ public static class TimedPlayCommand {
 				}
 			}
 
+			int botIndex = 0;
 			foreach (Bot targetBot in bots) {
+				// When scheduling for multiple bots, add a short delay between each so ASF can process each bot's Play() independently (per-bot isolation).
+				if (bots.Count > 1 && botIndex > 0) {
+					const int DelayBetweenBotsMs = 2000;
+					LogGenericDebug($"TimedPlay: Waiting {DelayBetweenBotsMs}ms before scheduling bot {targetBot.BotName} ({botIndex + 1}/{bots.Count}) so each bot is treated independently.");
+					await Task.Delay(DelayBetweenBotsMs).ConfigureAwait(false);
+				}
+				botIndex++;
+
 				TimedPlayEntry entry = new() {
 					GameMinutes = gameIds.ToDictionary(
 						gameId => gameId,

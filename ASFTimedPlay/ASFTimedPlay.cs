@@ -159,11 +159,11 @@ internal sealed class ASFTimedPlay
 
 	private static async Task ScheduleGamesImpl(Bot bot, TimedPlayEntry entry) {
 		try {
-			LogGenericDebug($"ScheduleGamesImpl started for bot {bot.BotName}");
+			LogGenericDebug($"ScheduleGamesImpl started for bot {bot.BotName} (IsConnectedAndLoggedOn={bot.IsConnectedAndLoggedOn})");
 
-			// Stop any currently running games
+			// Stop any currently running games (only affects this bot)
 			(bool stopSuccess, string stopMessage) = await bot.Actions.Play([]).ConfigureAwait(false);
-			LogGenericDebug($"Stop result: {stopSuccess}. {stopMessage}");
+			LogGenericDebug($"ScheduleGames {bot.BotName}: Stop result: {stopSuccess}. {stopMessage}");
 
 			// Dispose any existing timer for this bot
 			if (Instance != null && Instance.ActiveTimers.TryGetValue(bot, out Timer? existingTimer)) {
@@ -218,20 +218,21 @@ internal sealed class ASFTimedPlay
 				}
 			}
 
-			// Start playing game(s)
+			// Start playing game(s) for this bot only (each bot is independent)
 			HashSet<uint> set = [.. gamesToPlay];
 			LogGenericDebug(entry.SequentialMode
-				? $"Starting 1 game (sequential): {string.Join(",", set)}"
-				: $"Starting {set.Count} game(s) concurrently: {string.Join(",", set)}");
+				? $"ScheduleGames {bot.BotName}: Starting 1 game (sequential): {string.Join(",", set)}"
+				: $"ScheduleGames {bot.BotName}: Starting {set.Count} game(s) concurrently: {string.Join(",", set)}");
 			(bool success, string message) = await bot.Actions.Play(set).ConfigureAwait(false);
-			LogGenericDebug($"Play result: {success}. {message}");
+			string currentFarming = string.Join(",", bot.CardsFarmer.CurrentGamesFarmingReadOnly.Select(c => c.AppID));
+			LogGenericDebug($"ScheduleGames {bot.BotName}: Play result: {success}. {message}. CurrentGamesFarmingReadOnly after Play: [{currentFarming}]");
 
 			if (!success) {
 				if (Instance != null) {
-					_ = Instance.GameStartTimes.Remove(bot);
-					_ = Instance.GameDurationMinutes.Remove(bot);
-					_ = Instance.TotalPausedDuration.Remove(bot);
-					if (Instance.ActiveTimers.TryGetValue(bot, out Timer? t)) {
+						_ = Instance.GameStartTimes.Remove(bot);
+						_ = Instance.GameDurationMinutes.Remove(bot);
+						_ = Instance.TotalPausedDuration.Remove(bot);
+						if (Instance.ActiveTimers.TryGetValue(bot, out Timer? t)) {
 						await t.DisposeAsync().ConfigureAwait(false);
 						_ = Instance.ActiveTimers.Remove(bot);
 					}
@@ -261,16 +262,35 @@ internal sealed class ASFTimedPlay
 		}
 
 		HashSet<uint> currentSet = [.. startTimes.Keys];
+		// TotalPausedDuration is updated in the pause branch and when we transition back to playing (below)
 		double pausedMinutes = Instance.TotalPausedDuration.TryGetValue(bot, out TimeSpan paused) ? paused.TotalMinutes : 0;
 
-		// Check if bot is actually playing our set (otherwise treat as paused)
-		bool isPlayingOurSet = bot.IsConnectedAndLoggedOn &&
-			currentSet.All(g => bot.CardsFarmer.CurrentGamesFarmingReadOnly.Any(c => c.AppID == g));
+		// Decide if we consider this bot "playing our set" (timer counts) vs paused. Each bot is independent.
+		// Per ASF: when an account is in use elsewhere, ASF shows it as offline (IsConnectedAndLoggedOn = false).
+		// We must never unpause or count down when the bot is offline or when playing is not possible (ASF status
+		// "Playing not available" / IsPlayingPossible = false). See Commands.ResponseStatus and ASF wiki.
+		// CurrentGamesFarmingReadOnly is NOT populated by our Play() calls (only by ASF automatic farming),
+		// so our games will not appear there when we started via Play(). We treat empty list as "playing our set"
+		// only when the bot is connected and playing is possible.
+		bool isConnected = bot.IsConnectedAndLoggedOn;
+		bool isPlayingPossible = bot.IsPlayingPossible;
+		var currentFarming = bot.CardsFarmer.CurrentGamesFarmingReadOnly;
+		bool allOurGamesInFarming = currentSet.All(g => currentFarming.Any(c => c.AppID == g));
+		bool farmingDifferentGames = currentFarming.Count > 0 && !allOurGamesInFarming;
+		bool isPlayingOurSet = isConnected && isPlayingPossible && (currentFarming.Count == 0 || allOurGamesInFarming);
 
 		if (!isPlayingOurSet) {
+			string currentFarmingIds = string.Join(",", currentFarming.Select(c => c.AppID));
+			string expectedIds = string.Join(",", currentSet);
+			LogGenericDebug(
+				$"TimerCallback {bot.BotName}: isPlayingOurSet=false. IsConnectedAndLoggedOn={isConnected}, IsPlayingPossible={isPlayingPossible}, farmingDifferentGames={farmingDifferentGames}, expected games=[{expectedIds}], CurrentGamesFarmingReadOnly=[{currentFarmingIds}]");
 			if (Instance.TimerPausedAt.TryGetValue(bot, out DateTime pausedAt)) {
 				Instance.TotalPausedDuration[bot] += DateTime.UtcNow - pausedAt;
 				Instance.TimerPausedAt[bot] = DateTime.UtcNow;
+				// Do NOT call Play() here. We already called it on first pause detection below.
+				// Calling Play() every tick while paused causes repeated Steam session restarts and
+				// can make IsPlayingPossible flicker on the next tick, re-triggering the "first time"
+				// branch and adding spurious +1 min compensation each cycle.
 			} else {
 				// First time pausing: we may have counted up to 1 minute while they were already on another machine. Add 1 min back to err on the side of caution.
 				Instance.TimerPausedAt[bot] = DateTime.UtcNow;
@@ -294,13 +314,19 @@ internal sealed class ASFTimedPlay
 				} finally {
 					_ = ConfigLock.Release();
 				}
-			}
-			(bool resumeSuccess, string resumeMsg) = await bot.Actions.Play(currentSet).ConfigureAwait(false);
-			if (resumeSuccess) {
-				_ = Instance.TimerPausedAt.Remove(bot);
-				LogGenericDebug($"Resumed playing {string.Join(",", currentSet)} for bot {bot.BotName}: {resumeMsg}");
+				// Only attempt to resume on first pause detection. Do not clear TimerPausedAt here —
+				// Play() can return success before the bot actually switches games; clearing it would
+				// cause the next tick to re-enter "first time pausing" and add another +1 min.
+				// We only clear TimerPausedAt when we actually observe the bot playing (see below).
+				_ = await bot.Actions.Play(currentSet).ConfigureAwait(false);
 			}
 			return;
+		}
+
+		// Bot is actually playing our set. If we were previously paused, close out the last paused segment and clear pause state.
+		if (Instance.TimerPausedAt.TryGetValue(bot, out DateTime resumedPausedAt)) {
+			Instance.TotalPausedDuration[bot] = Instance.TotalPausedDuration.TryGetValue(bot, out TimeSpan soFar) ? soFar + (DateTime.UtcNow - resumedPausedAt) : (DateTime.UtcNow - resumedPausedAt);
+			_ = Instance.TimerPausedAt.Remove(bot);
 		}
 
 		// Compute remaining per game
@@ -410,7 +436,8 @@ internal sealed class ASFTimedPlay
 					}
 					module.SetIdleGames(currentEntry.IdleGameIds);
 					LogGenericInfo($"No more games to play, starting to idle {string.Join(",", currentEntry.IdleGameIds)}");
-				} else if (Config.TimedPlayGames.ContainsKey(bot.BotName)) {
+				} else {
+					// Resume normal ASF operation now that games are stopped
 					(bool resumeSuccess, string resumeMsg) = bot.Actions.Resume();
 					LogGenericInfo($"Timed play finished for {bot.BotName}: {resumeMsg}");
 				}
@@ -504,9 +531,6 @@ internal sealed class ASFTimedPlay
 								$"No remaining games and no idle games, removing from TimedPlayGames"
 							);
 							_ = Config.TimedPlayGames.Remove(bot.BotName);
-							// Return to normal ASF operation
-							(bool success, string message) = bot.Actions.Resume();
-							LogGenericInfo($"Timed play finished for {bot.BotName}: {message}");
 						}
 					}
 
@@ -674,9 +698,8 @@ internal sealed class ASFTimedPlay
 		return command switch {
 			"TIMEDPLAY" => await Commands.TimedPlayCommand.Response(bot, args).ConfigureAwait(false),
 			"IDLE" => await Commands.IdleCommand.Response(bot, args).ConfigureAwait(false),
-			// Aliases: tp (short), pf (legacy)
+			// Aliases
 			"TP" => await Commands.TimedPlayCommand.Response(bot, args).ConfigureAwait(false),
-			"PF" => await Commands.TimedPlayCommand.Response(bot, args).ConfigureAwait(false),
 			"I" => await Commands.IdleCommand.Response(bot, args).ConfigureAwait(false),
 			_ => null,
 		};
