@@ -52,6 +52,7 @@ internal static class CommandHelpers {
 					_ = Instance.GameDurationMinutes.Remove(bot);
 					_ = Instance.TimerPausedAt.Remove(bot);
 					_ = Instance.TotalPausedDuration.Remove(bot);
+					_ = Instance.ResumePlayIssued.Remove(bot);
 					LogGenericDebug($"Cleared timer state for bot {bot.BotName}");
 				}
 			}
@@ -95,13 +96,17 @@ internal static class CommandHelpers {
 
 			// Check if there are active timed play games
 			if (entry.GameMinutes.Count > 0) {
-				// Same as timer: never ACTIVE when offline or when playing not possible (ASF shows offline when in use elsewhere).
+				// Same as timer: never ACTIVE when offline / playing not possible, or while waiting to reclaim after pause.
 				// CurrentGamesFarmingReadOnly is only set by ASF automatic farming, not by our Play().
 				var currentFarming = bot.CardsFarmer.CurrentGamesFarmingReadOnly;
 				bool allOurGamesInFarming = entry.GameMinutes.Keys.All(g => currentFarming.Any(c => c.AppID == g));
-				bool actuallyPlayingRightNow = bot.IsConnectedAndLoggedOn && bot.IsPlayingPossible && (currentFarming.Count == 0 || allOurGamesInFarming);
+				bool canPlay = bot.IsConnectedAndLoggedOn && bot.IsPlayingPossible;
+				bool farmingConflict = currentFarming.Count > 0 && !allOurGamesInFarming;
+				bool isPaused = Instance?.TimerPausedAt.ContainsKey(bot) == true;
+				bool resumeIssued = Instance?.ResumePlayIssued.Contains(bot) == true;
+				bool actuallyPlayingRightNow = canPlay && !farmingConflict && (!isPaused || resumeIssued);
 				bool hasTimer = Instance?.ActiveTimers.ContainsKey(bot) == true;
-				bool inPausedState = Instance?.TimerPausedAt.ContainsKey(bot) == true || (hasTimer && !actuallyPlayingRightNow);
+				bool inPausedState = isPaused || (hasTimer && !actuallyPlayingRightNow);
 
 				// When paused, show raw remaining (time does not count). When playing, apply wall-clock correction.
 				string gamesStatus;

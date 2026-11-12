@@ -104,10 +104,14 @@ Alias: `!i` (same as `!idle`).
 
 ## Installation
 
-1. Download the plugin files
-2. Place them in your ASF plugins directory
+1. Download the zip that matches your ASF major version from [Releases](https://github.com/UpDownLeftDie/ASFTimedPlay/releases):
+   - `ASFTimedPlay-V6.zip` for ArchiSteamFarm **6.x**
+   - `ASFTimedPlay-V7.zip` for ArchiSteamFarm **7.x**
+2. Extract into your ASF `plugins` directory
 3. Restart ASF
 4. Use the commands to start playing games
+
+While ASF 6 and 7 both exist, each GitHub release should include **both** zips. ASF auto-update picks the asset for its own major version.
 
 ## Troubleshooting
 
@@ -124,8 +128,8 @@ Run **`!timedplay debug`** and share the output when asking for help or reportin
 
 ### Timer appears paused
 
-- The timer pauses when the bot is disconnected or when ASF reports the bot is farming *different* games than the timed set.
-- The timer only counts down when the bot is **connected** and **not** "Playing not available" (ASF's `IsConnectedAndLoggedOn` and `!PlayingBlocked`). When an account is in use elsewhere, ASF shows it as offline, so the timer stays paused. See ASF's `Commands.ResponseStatus` and [Plugins development](https://github.com/JustArchiNET/ArchiSteamFarm/wiki/Plugins-development) for API usage.
+- The timer pauses when the bot is disconnected, when playing is not possible (`IsPlayingPossible`), or when ASF is farming *different* games than the timed set.
+- While paused for an in-use account, the plugin does **not** call `Play()` (so it will not fight your Steam client). After the account is free again it issues one reclaim `Play()` before the timer starts counting again.
 - Use `!timedplay status` to check timer state.
 
 ### Stop command not working

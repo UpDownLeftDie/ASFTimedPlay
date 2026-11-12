@@ -40,10 +40,11 @@ internal sealed class IdleModule : IDisposable {
 		await IdleLock.WaitAsync().ConfigureAwait(false);
 
 		try {
-			// Don't interfere with ASF operations or when account is in use elsewhere (e.g. user on another device)
+			// Don't interfere with ASF operations, active timed play, or when account is in use elsewhere
 			if (
 					!Bot.IsConnectedAndLoggedOn
 					|| !Bot.IsPlayingPossible
+					|| ASFTimedPlay.Instance?.ActiveTimers.ContainsKey(Bot) == true
 					|| Bot.BotConfig.GamesPlayedWhileIdle.Count > 0
 					|| Bot.CardsFarmer.CurrentGamesFarmingReadOnly.Count > 0
 					|| Bot.GamesToRedeemInBackgroundCount > 0

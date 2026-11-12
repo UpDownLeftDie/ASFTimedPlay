@@ -2,8 +2,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
         <OutputType>Library</OutputType>
-        <InternalsVisibleTo>ASFTimedPlay.Tests</InternalsVisibleTo>
     </PropertyGroup>
+    <ItemGroup>
+        <InternalsVisibleTo Include="ASFTimedPlay.Tests" />
+    </ItemGroup>
     <ItemGroup>
         <PackageReference Include="JetBrains.Annotations"
                           PrivateAssets="all" />

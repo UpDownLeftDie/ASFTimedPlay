@@ -9,8 +9,8 @@ namespace ASFTimedPlay;
 /// Supports: plain minutes (MM), HH:MM, DD:HH:MM, and suffix form (10h 45m, 1d 2h).
 /// </summary>
 internal static partial class DurationParser {
-	// Match number + unit: e.g. "10h", "45m", "1d", "2h30m"
-	[GeneratedRegex(@"(\d+)\s*([dDhHmM])\b")]
+	// Match number + unit: e.g. "10h", "45m", "1d", "2h30m" (no trailing \b — digits after the unit are valid)
+	[GeneratedRegex(@"(\d+)\s*([dDhHmM])")]
 	private static partial Regex UnitPattern();
 
 	/// <summary>

@@ -3,11 +3,12 @@ using System.Collections.Generic;
 using System.Composition;
 using System.IO;
 using System.Linq;
-using System.Threading; // Add for Timer
+using System.Threading;
 using System.Threading.Tasks;
 using ArchiSteamFarm.Helpers.Json;
 using ArchiSteamFarm.Plugins.Interfaces;
 using ArchiSteamFarm.Steam;
+using ArchiSteamFarm.Storage;
 using JetBrains.Annotations;
 using SteamKit2;
 using static ASFTimedPlay.Utils;
@@ -21,7 +22,7 @@ internal sealed class ASFTimedPlay
 	: IGitHubPluginUpdates,
 		IPlugin,
 		IAsyncDisposable,
-		IBotCommand2,
+		IBotCommand,
 		IBot,
 		IBotConnection {
 	public string Name => nameof(ASFTimedPlay);
@@ -49,6 +50,9 @@ internal sealed class ASFTimedPlay
 	internal static readonly SemaphoreSlim ConfigLock = new(1, 1);
 
 	internal readonly Dictionary<Bot, DateTime> TimerPausedAt = [];
+	// After an interruption, empty CurrentGamesFarmingReadOnly is not proof we are playing — only a
+	// reclaim Play() while the account is free again. Tracks that we already issued that reclaim.
+	internal readonly HashSet<Bot> ResumePlayIssued = [];
 
 	private const int IdleResumeIntervalMinutes = 2;
 	private Timer? IdleResumeTimer;
@@ -266,34 +270,37 @@ internal sealed class ASFTimedPlay
 		double pausedMinutes = Instance.TotalPausedDuration.TryGetValue(bot, out TimeSpan paused) ? paused.TotalMinutes : 0;
 
 		// Decide if we consider this bot "playing our set" (timer counts) vs paused. Each bot is independent.
-		// Per ASF: when an account is in use elsewhere, ASF shows it as offline (IsConnectedAndLoggedOn = false).
-		// We must never unpause or count down when the bot is offline or when playing is not possible (ASF status
-		// "Playing not available" / IsPlayingPossible = false). See Commands.ResponseStatus and ASF wiki.
-		// CurrentGamesFarmingReadOnly is NOT populated by our Play() calls (only by ASF automatic farming),
-		// so our games will not appear there when we started via Play(). We treat empty list as "playing our set"
-		// only when the bot is connected and playing is possible.
+		// Per ASF: when an account is in use elsewhere, ASF shows it as offline (IsConnectedAndLoggedOn = false)
+		// and/or IsPlayingPossible = false (PlayingBlocked / LibraryLocked). Never count down in those states.
+		// CurrentGamesFarmingReadOnly is NOT populated by our Play() calls (only by ASF automatic farming).
+		// While active, empty farming + canPlay means we treat ourselves as playing.
+		// While paused, empty farming alone is NOT enough — after the user leaves Steam the bot can be
+		// free again with an empty farming list without actually playing our games. Require a reclaim
+		// Play() (ResumePlayIssued) before leaving the paused state.
 		bool isConnected = bot.IsConnectedAndLoggedOn;
 		bool isPlayingPossible = bot.IsPlayingPossible;
+		bool canPlay = isConnected && isPlayingPossible;
 		var currentFarming = bot.CardsFarmer.CurrentGamesFarmingReadOnly;
 		bool allOurGamesInFarming = currentSet.All(g => currentFarming.Any(c => c.AppID == g));
-		bool farmingDifferentGames = currentFarming.Count > 0 && !allOurGamesInFarming;
-		bool isPlayingOurSet = isConnected && isPlayingPossible && (currentFarming.Count == 0 || allOurGamesInFarming);
+		bool farmingConflict = currentFarming.Count > 0 && !allOurGamesInFarming;
+		bool isPaused = Instance.TimerPausedAt.ContainsKey(bot);
+		bool resumeIssued = Instance.ResumePlayIssued.Contains(bot);
+		bool isPlayingOurSet = canPlay && !farmingConflict && (!isPaused || resumeIssued);
 
 		if (!isPlayingOurSet) {
 			string currentFarmingIds = string.Join(",", currentFarming.Select(c => c.AppID));
 			string expectedIds = string.Join(",", currentSet);
 			LogGenericDebug(
-				$"TimerCallback {bot.BotName}: isPlayingOurSet=false. IsConnectedAndLoggedOn={isConnected}, IsPlayingPossible={isPlayingPossible}, farmingDifferentGames={farmingDifferentGames}, expected games=[{expectedIds}], CurrentGamesFarmingReadOnly=[{currentFarmingIds}]");
+				$"TimerCallback {bot.BotName}: isPlayingOurSet=false. IsConnectedAndLoggedOn={isConnected}, IsPlayingPossible={isPlayingPossible}, farmingConflict={farmingConflict}, resumeIssued={resumeIssued}, expected games=[{expectedIds}], CurrentGamesFarmingReadOnly=[{currentFarmingIds}]");
 			if (Instance.TimerPausedAt.TryGetValue(bot, out DateTime pausedAt)) {
 				Instance.TotalPausedDuration[bot] += DateTime.UtcNow - pausedAt;
 				Instance.TimerPausedAt[bot] = DateTime.UtcNow;
-				// Do NOT call Play() here. We already called it on first pause detection below.
-				// Calling Play() every tick while paused causes repeated Steam session restarts and
-				// can make IsPlayingPossible flicker on the next tick, re-triggering the "first time"
-				// branch and adding spurious +1 min compensation each cycle.
+				// Do not call Play() every paused tick — that restarts Steam sessions and can flicker
+				// IsPlayingPossible, re-triggering first-pause +1 min compensation.
 			} else {
 				// First time pausing: we may have counted up to 1 minute while they were already on another machine. Add 1 min back to err on the side of caution.
 				Instance.TimerPausedAt[bot] = DateTime.UtcNow;
+				_ = Instance.ResumePlayIssued.Remove(bot);
 				LogGenericDebug($"Timer paused for bot {bot.BotName} at {DateTime.UtcNow}");
 				await ConfigLock.WaitAsync().ConfigureAwait(false);
 				try {
@@ -314,11 +321,19 @@ internal sealed class ASFTimedPlay
 				} finally {
 					_ = ConfigLock.Release();
 				}
-				// Only attempt to resume on first pause detection. Do not clear TimerPausedAt here —
-				// Play() can return success before the bot actually switches games; clearing it would
-				// cause the next tick to re-enter "first time pausing" and add another +1 min.
-				// We only clear TimerPausedAt when we actually observe the bot playing (see below).
-				_ = await bot.Actions.Play(currentSet).ConfigureAwait(false);
+			}
+
+			if (!canPlay) {
+				// Account offline or playing blocked (user on another machine) — wait quietly.
+				_ = Instance.ResumePlayIssued.Remove(bot);
+			} else if (!resumeIssued) {
+				// Account is free again (or ASF farming conflicted). Reclaim once; do not clear
+				// TimerPausedAt until the next tick observes canPlay without farming conflict.
+				(bool resumeSuccess, string resumeMsg) = await bot.Actions.Play(currentSet).ConfigureAwait(false);
+				LogGenericDebug($"TimerCallback {bot.BotName}: reclaim Play result: {resumeSuccess}. {resumeMsg}");
+				if (resumeSuccess) {
+					_ = Instance.ResumePlayIssued.Add(bot);
+				}
 			}
 			return;
 		}
@@ -327,6 +342,8 @@ internal sealed class ASFTimedPlay
 		if (Instance.TimerPausedAt.TryGetValue(bot, out DateTime resumedPausedAt)) {
 			Instance.TotalPausedDuration[bot] = Instance.TotalPausedDuration.TryGetValue(bot, out TimeSpan soFar) ? soFar + (DateTime.UtcNow - resumedPausedAt) : (DateTime.UtcNow - resumedPausedAt);
 			_ = Instance.TimerPausedAt.Remove(bot);
+			_ = Instance.ResumePlayIssued.Remove(bot);
+			LogGenericDebug($"Timer resumed for bot {bot.BotName}");
 		}
 
 		// Compute remaining per game
@@ -376,6 +393,7 @@ internal sealed class ASFTimedPlay
 			ASFTimedPlay instance = Instance;
 			_ = instance.TotalPausedDuration.Remove(bot);
 			_ = instance.TimerPausedAt.Remove(bot);
+			_ = instance.ResumePlayIssued.Remove(bot);
 
 			foreach (uint gameId in completed) {
 				if (instance.GameStartTimes.TryGetValue(bot, out Dictionary<uint, DateTime>? starts)) {
@@ -421,6 +439,7 @@ internal sealed class ASFTimedPlay
 					// Ensure state is cleared even if Play throws
 					_ = instance.TotalPausedDuration.Remove(bot);
 					_ = instance.TimerPausedAt.Remove(bot);
+					_ = instance.ResumePlayIssued.Remove(bot);
 				}
 
 				// Sequential mode: if more games remain, schedule the next one
@@ -461,6 +480,7 @@ internal sealed class ASFTimedPlay
 		_ = instance.GameDurationMinutes.Remove(bot);
 		_ = instance.TotalPausedDuration.Remove(bot);
 		_ = instance.TimerPausedAt.Remove(bot);
+		_ = instance.ResumePlayIssued.Remove(bot);
 		(bool stopSuccess, string stopMsg) = await bot.Actions.Play([]).ConfigureAwait(false);
 		LogGenericDebug($"Stopped playing for {bot.BotName}: {stopSuccess}. {stopMsg}");
 		(bool resumeSuccess, string resumeMsg) = bot.Actions.Resume();
@@ -545,7 +565,7 @@ internal sealed class ASFTimedPlay
 		}
 	}
 
-	public async Task OnLoaded() {
+	public async Task OnLoaded(CancellationToken cancellationToken = default) {
 		LogGenericInfo($"{Name} has been loaded!");
 		try {
 			// Initialize config here instead of constructor
@@ -561,11 +581,15 @@ internal sealed class ASFTimedPlay
 							return;
 						}
 						foreach (KeyValuePair<string, TimedPlayEntry> kvp in Config.TimedPlayGames) {
-							if (kvp.Value.IdleGameIds.Count == 0) {
+							if (kvp.Value.IdleGameIds.Count == 0 || kvp.Value.GameMinutes.Count > 0) {
 								continue;
 							}
 							Bot? targetBot = Bot.GetBot(kvp.Key);
-							if (targetBot == null || !targetBot.IsConnectedAndLoggedOn) {
+							if (targetBot == null || !targetBot.IsConnectedAndLoggedOn || !targetBot.IsPlayingPossible) {
+								continue;
+							}
+							// Timed-play timer owns the session until it finishes
+							if (Instance.ActiveTimers.ContainsKey(targetBot)) {
 								continue;
 							}
 							if (!BotIdleModules.TryGetValue(targetBot, out IdleModule? module)) {
@@ -590,7 +614,7 @@ internal sealed class ASFTimedPlay
 		}
 	}
 
-	public async Task OnBotLoggedOn(Bot bot) {
+	public async Task OnBotLoggedOn(Bot bot, CancellationToken cancellationToken = default) {
 		try {
 			if (Config == null || !bot.IsConnectedAndLoggedOn) {
 				return;
@@ -604,7 +628,7 @@ internal sealed class ASFTimedPlay
 
 				if (entry.GameMinutes.Count > 0) {
 					// Apply wall-clock correction so remaining time reflects elapsed time since last save (e.g. across restarts)
-					await ConfigLock.WaitAsync().ConfigureAwait(false);
+					await ConfigLock.WaitAsync(cancellationToken).ConfigureAwait(false);
 					try {
 						ApplyWallClockCorrectionToEntry(entry);
 						await SaveConfig(lockAlreadyHeld: true).ConfigureAwait(false);
@@ -644,11 +668,16 @@ internal sealed class ASFTimedPlay
 		}
 	}
 
-	public Task OnBotDestroy(Bot bot) {
+	public Task OnBotDestroy(Bot bot, CancellationToken cancellationToken = default) {
 		if (BotIdleModules.TryGetValue(bot, out IdleModule? module)) {
 			module.StopIdling();
 			module.Dispose();
 			_ = BotIdleModules.Remove(bot);
+		}
+
+		if (Instance != null) {
+			_ = Instance.ResumePlayIssued.Remove(bot);
+			_ = Instance.TimerPausedAt.Remove(bot);
 		}
 
 		return Task.CompletedTask;
@@ -671,6 +700,7 @@ internal sealed class ASFTimedPlay
 		GameDurationMinutes.Clear();
 		TotalPausedDuration.Clear();
 		TimerPausedAt.Clear();
+		ResumePlayIssued.Clear();
 
 		foreach (IdleModule module in BotIdleModules.Values) {
 			module.StopIdling();
@@ -683,10 +713,11 @@ internal sealed class ASFTimedPlay
 
 	public async Task<string?> OnBotCommand(
 		Bot bot,
-		EAccess access,
+		EBotUserAccess access,
 		string message,
 		string[] args,
-		ulong steamID = 0
+		ulong steamID = 0,
+		CancellationToken cancellationToken = default
 	) {
 		if (args.Length == 0) {
 			return null;
@@ -705,8 +736,19 @@ internal sealed class ASFTimedPlay
 		};
 	}
 
-	public Task OnBotInit(Bot bot) => Task.CompletedTask;
+	public Task OnBotInit(Bot bot, CancellationToken cancellationToken = default) => Task.CompletedTask;
 
-	public Task OnBotDisconnected(Bot bot, EResult reason) => Task.CompletedTask;
+	public Task OnBotDisconnected(Bot bot, EResult reason, CancellationToken cancellationToken = default) {
+		// Mark paused immediately so wall-clock does not keep counting while Steam is in use elsewhere
+		// (ASF often reports offline / reconnects). TimerCallback also handles this; this closes the gap
+		// until the next 60s tick.
+		if (Instance != null && Instance.ActiveTimers.ContainsKey(bot) && !Instance.TimerPausedAt.ContainsKey(bot)) {
+			Instance.TimerPausedAt[bot] = DateTime.UtcNow;
+			_ = Instance.ResumePlayIssued.Remove(bot);
+			LogGenericDebug($"Timer paused on disconnect for bot {bot.BotName} (reason: {reason})");
+		}
+
+		return Task.CompletedTask;
+	}
 }
 #pragma warning restore CA1812 // ASF uses this class during runtime
